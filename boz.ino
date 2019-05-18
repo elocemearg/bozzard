@@ -647,9 +647,13 @@ void setup() {
     /* Set app_call_defer_init to the init function of the first application
        to run. This is normally the main menu app, unless the user is
        holding down the reset button when the unit is switched on, in which
-       case we start the test application. */
+       case we start the test application, or if the user is holding down the
+       yellow button, in which case we play some music. */
     if (digitalRead(PIN_QM_RESET) == LOW) {
         app_call_defer_init = test_init;
+    }
+    else if (digitalRead(PIN_QM_YELLOW) == LOW) {
+        app_call_defer_init = music_loop_init;
     }
     else {
         app_call_defer_init = main_menu_init;

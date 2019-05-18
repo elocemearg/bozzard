@@ -228,7 +228,9 @@ static void redraw_display(struct conundrum_state *state) {
     }
     else if (!state->clock_has_started) {
         // clock not started yet
-        boz_display_set_cursor(0, 3);
+        update_clock_value_tenths(ms);
+
+        boz_display_set_cursor(1, 3);
         boz_display_write_string_P(s_con_ready);
 
         // all lights off before clock is started

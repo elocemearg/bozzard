@@ -267,19 +267,30 @@ void
 music_loop_init(void *dummy) {
     boz_display_clear();
     boz_set_event_handler_qm_reset(music_loop_reset);
-    boz_set_event_handler_qm_yellow(music_loop_yellow);
     boz_set_event_handler_qm_play(music_loop_play);
 
     ml_set_cgram_char(0, treble_clef_top);
     ml_set_cgram_char(1, treble_clef_bottom);
     ml_set_cgram_char(2, stave_top);
     ml_set_cgram_char(3, stave_bottom);
+
+    /* Do the initialisation in stages with a short wait between, so as not
+       to overfill the display command queue */
+    boz_set_alarm(10, music_loop_init_stage_two, NULL);
+}
+
+void
+music_loop_init_stage_two(void *dummy) {
     ml_set_cgram_char(4, stave_start_top);
     ml_set_cgram_char(5, stave_start_bottom);
     ml_set_cgram_char(6, stave_filled_top);
     ml_set_cgram_char(7, stave_filled_bottom);
+    boz_set_alarm(10, music_loop_init_stage_three, NULL);
+}
 
-    boz_display_set_cursor(0, 0);
+void
+music_loop_draw_display_start(void) {
+    boz_display_clear();
     boz_display_write_char(0);
     boz_display_write_long(ml_melody_beats_per_bar, 2, NULL);
     boz_display_write_char(' ');
@@ -294,10 +305,14 @@ music_loop_init(void *dummy) {
     boz_display_write_char(5);
     for (int i = 5; i < 16; ++i)
         boz_display_write_char(3);
+}
 
+void
+music_loop_init_stage_three(void *dummy) {
+    music_loop_draw_display_start();
     ml_melody_pos = 0;
-
-    music_loop_yellow(NULL);
+    ml_beat = 0;
+    music_loop_play(NULL);
 }
 
 void
@@ -364,10 +379,13 @@ music_loop_sound_queue_ready(void *cookie) {
 }
 
 void
-music_loop_reset(void *cookie) {
+music_stop(void) {
     boz_sound_stop_all();
+    ml_melody_pos = 0;
+    ml_beat = 0;
+    music_loop_draw_display_start();
     boz_set_event_handler_sound_queue_not_full(NULL);
-    boz_app_exit(0);
+    boz_cancel_alarm();
 }
 
 void
@@ -395,10 +413,8 @@ ml_beat_handler(void *cookie) {
 }
 
 void
-music_loop_yellow(void *cookie) {
-    boz_sound_stop_all();
-    ml_melody_pos = 0;
-    ml_beat = 0;
+music_loop_play(void *cookie) {
+    music_stop();
     boz_set_event_handler_sound_queue_not_full(music_loop_sound_queue_ready);
     
     /* First alarm is 100ms early, to give time for the display to change */
@@ -409,10 +425,7 @@ music_loop_yellow(void *cookie) {
 }
 
 void
-music_loop_play(void *cookie) {
-    boz_sound_stop_all();
-    ml_melody_pos = 0;
-    ml_beat = 0;
-    boz_set_event_handler_sound_queue_not_full(NULL);
-    boz_cancel_alarm();
+music_loop_reset(void *cookie) {
+    music_stop();
+    boz_app_exit(0);
 }

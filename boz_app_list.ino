@@ -12,7 +12,7 @@ const PROGMEM struct boz_app app_list[] = {
     { "Buzzer round", br_init, BOZ_APP_MAIN },
     { "Chess clocks", chess_init, BOZ_APP_MAIN },
     { "Test", test_init, 0 },
-    { "Spanish Flea", music_loop_init, BOZ_APP_MAIN },
+    { "Spanish Flea", music_loop_init, 0 },
     { "System info", sysinfo_init, BOZ_APP_MAIN },
     { "Option menu", option_menu_init, 0 },
 };
