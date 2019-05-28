@@ -2,6 +2,17 @@
 #include "options.h"
 #include "boz_app_inits.h"
 
+/* Rules variables:
+   Time limit (0 = no limit)
+   Count up/count down (ironically, Countdown Conundrum counts up)
+   Buzz stops clock (Yes/No)
+   Lockout for N seconds or until QM unlocks
+   Warn remaining N seconds
+   Re-buzzing allowed (Yes/No)
+   1v2v3v4 or 1v234 or 12v34 or 123v4
+   Show buzz time (Yes/No) (available only if not 1v2v3v4)
+*/
+
 const PROGMEM char s_con_time_limit[] = "Time limit";
 const PROGMEM char s_con_warn_remaining[] = "Warn remaining";
 const PROGMEM char s_which_buzzers[] = "Which buzzers?";
@@ -477,16 +488,16 @@ con_play(void *cookie) {
            it does anything else and call the buzz handler. If more than one
            buzzer is held down, the one which was held down first buzzes.
          */
-        unsigned long earliest_press_millis;
+        unsigned long earliest_press_micros;
         int earliest_buzzer = -1;
 
         if (state->clock_has_started) {
             for (int buzzer = 0; buzzer < NUM_BUZZERS; ++buzzer) {
-                unsigned long pressed_since_millis;
-                if (is_entitled_to_buzz(state, BUZZER_TO_PLAYER(buzzer)) && boz_is_button_pressed(FUNC_BUZZER, buzzer, &pressed_since_millis)) {
-                    if (earliest_buzzer == -1 || time_passed(earliest_press_millis, pressed_since_millis)) {
+                unsigned long pressed_since_micros;
+                if (is_entitled_to_buzz(state, BUZZER_TO_PLAYER(buzzer)) && boz_is_button_pressed(FUNC_BUZZER, buzzer, &pressed_since_micros)) {
+                    if (earliest_buzzer == -1 || time_passed(earliest_press_micros, pressed_since_micros)) {
                         earliest_buzzer = buzzer;
-                        earliest_press_millis = pressed_since_millis;
+                        earliest_press_micros = pressed_since_micros;
                     }
                 }
             }

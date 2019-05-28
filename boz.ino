@@ -100,11 +100,11 @@ struct button_state {
     byte press_threshold_ms;
     byte release_threshold_ms;
 
-    /* If is_pressed, pressed_since_millis is the value of millis() since when
+    /* If is_pressed, pressed_since_micros is the value of micros() since when
        the button has been continuously pressed.
-       If not is_pressed, released_since_millis is the value of millis()
+       If not is_pressed, released_since_micros is the value of micros()
        since when the button has been continuously not pressed. */
-    unsigned long pressed_since_millis, released_since_millis;
+    unsigned long pressed_since_micros, released_since_micros;
 
     /* 1 if the button was pressed last time we looked, 0 if not. */
     unsigned int is_pressed : 1;
@@ -133,7 +133,7 @@ struct disp_cmd_state disp_cmd_state;
 struct boz_clock clocks[NUM_CLOCKS];
 unsigned short master_clocks_enabled = 0; // bitmask
 
-const byte BUTTON_PRESS_THRESHOLD_MS = 10;
+const byte BUTTON_PRESS_THRESHOLD_MS = 0;
 const byte BUTTON_RELEASE_THRESHOLD_MS = 25;
 const byte ROTARY_CLOCK_PRESS_THRESHOLD_MS = 3;
 const byte ROTARY_CLOCK_RELEASE_THRESHOLD_MS = 3;
@@ -256,6 +256,7 @@ boz_sound_stop_all(void) {
     queue_clear(&snd_cmd_queue.qstate);
 }
 
+#ifdef BOZ_ORIGINAL
 void
 boz_led_set(int which_led, int on) {
     /* which_led must be between 0 and 3 */
@@ -273,6 +274,24 @@ void
 boz_leds_set(int mask) {
     boz_shift_reg_set_bottom_nibble((byte) (mask & 0x0f));
 }
+#else
+
+int leds_to_pins[] = { PIN_LED_R, PIN_LED_G, PIN_LED_Y, PIN_LED_B };
+
+void
+boz_led_set(int which_led, int on) {
+    int pin = leds_to_pins[which_led & 3];
+    digitalWrite(pin, on ? HIGH : LOW);
+}
+
+void
+boz_leds_set(int mask) {
+    for (int i = 0; i < 4; ++i) {
+        boz_led_set(i, (mask & (1 << i)) != 0);
+    }
+}
+
+#endif
 
 int
 boz_display_enqueue(unsigned int cmd_word) {
@@ -362,14 +381,14 @@ boz_app_exit(int exit_status) {
 }
 
 int
-boz_is_button_pressed(int button_func, int buzzer_id, unsigned long *pressed_since_millis_r) {
+boz_is_button_pressed(int button_func, int buzzer_id, unsigned long *pressed_since_micros_r) {
     for (int i = 0; i < num_buttons; ++i) {
         struct button_state *button = &buttons[i];
         if (button->button_function == button_func && (button_func != FUNC_BUZZER || buzzer_id == button->buzzer_id)) {
             if (button->is_pressed && button->event_delivered) {
                 /* Button is pressed and event has already been delivered */
-                if (pressed_since_millis_r) {
-                    *pressed_since_millis_r = button->pressed_since_millis;
+                if (pressed_since_micros_r) {
+                    *pressed_since_micros_r = button->pressed_since_micros;
                 }
                 return 1;
             }
@@ -613,8 +632,28 @@ ISR(TIMER1_OVF_vect) {
     sleep_disable();
 }
 
+int read_turny_push_button(void) {
+#ifdef BOZ_ORIGINAL
+    return digitalRead(PIN_QM_RE_KEY);
+#else
+    int value;
+    pinMode(PIN_BUTTON_INT, INPUT);
+    value = digitalRead(PIN_QM_RE_KEY);
+    pinMode(PIN_BUTTON_INT, OUTPUT);
+    digitalWrite(PIN_BUTTON_INT, LOW);
+    return value;
+#endif
+}
+
+static int read_button_value(int pin) {
+    if (pin == PIN_QM_RE_KEY)
+        return read_turny_push_button();
+    else
+        return digitalRead(pin);
+}
+
 void setup() {
-    /* Set our button intputs as inputs */
+    /* Set our button inputs as inputs */
     pinMode(PIN_BUZZER_0, INPUT_PULLUP);
     pinMode(PIN_BUZZER_1, INPUT_PULLUP);
     pinMode(PIN_BUZZER_2, INPUT_PULLUP);
@@ -625,15 +664,31 @@ void setup() {
     pinMode(PIN_QM_RE_CLOCK, INPUT_PULLUP);
     pinMode(PIN_QM_RE_DATA, INPUT_PULLUP);
     pinMode(PIN_QM_RE_KEY, INPUT_PULLUP);
+
+#ifdef BOZ_ORIGINAL
     pinMode(PIN_BUTTON_INT, INPUT_PULLUP);
+#else
+    /* Interrupt line is connected to the I/O pins through switches */
+    pinMode(PIN_BUTTON_INT, OUTPUT);
+    digitalWrite(PIN_BUTTON_INT, LOW);
+#endif
 
     /* The pin feeding the signal to the speaker, and the builtin LED, are
        both outputs */
     pinMode(PIN_SPEAKER, OUTPUT);
     pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, LOW);
 
     /* Analogue pin on which we sense the battery voltage */
     pinMode(PIN_BATTERY_SENSOR, INPUT);
+
+#ifndef BOZ_ORIGINAL
+    pinMode(PIN_LED_R, OUTPUT);
+    pinMode(PIN_LED_G, OUTPUT);
+    pinMode(PIN_LED_Y, OUTPUT);
+    pinMode(PIN_LED_B, OUTPUT);
+    boz_leds_set(0);
+#endif
 
     /* Initialise shift register - this will also set the appropriate pin
        modes on the pins we use to control the shift register */
@@ -659,6 +714,17 @@ void setup() {
         app_call_defer_init = main_menu_init;
     }
 }
+
+const byte switch_pins[] = {
+    PIN_BUZZER_0,
+    PIN_BUZZER_1,
+    PIN_BUZZER_2,
+    PIN_BUZZER_3,
+    PIN_QM_PLAY,
+    PIN_QM_YELLOW,
+    PIN_QM_RESET
+};
+#define num_switch_pins ((int) (sizeof(switch_pins) / sizeof(switch_pins[0])))
 
 void loop() {
     unsigned long ms, us;
@@ -770,17 +836,18 @@ void loop() {
         /* Check if any buttons have changed state since we last checked */
         for (int i = 0; i < num_buttons; ++i) {
             struct button_state *button = &buttons[i];
-            int bval = digitalRead(button->pin);
+            int bval = read_button_value(button->pin);
 
             if (bval == (button->active_low ? HIGH : LOW)) {
                 if (button->is_pressed) {
                     /* If it was pressed, it no longer is, so record when we
                        saw the button get released */
                     button->is_pressed = 0;
-                    button->released_since_millis = ms;
+                    button->released_since_micros = us;
                 }
                 if (button->event_delivered) {
-                    if (time_elapsed(button->released_since_millis, ms) >= button->release_threshold_ms) {
+                    if (button->release_threshold_ms == 0 ||
+                            time_elapsed(button->released_since_micros, us) / 1000 >= button->release_threshold_ms) {
                         /* Button has been released long enough that if we see
                            another press, we should consider it another event */
                         button->event_delivered = 0;
@@ -791,7 +858,7 @@ void loop() {
                 if (!button->is_pressed) {
                     /* Button has changed state to "pressed". */
                     button->is_pressed = 1;
-                    button->pressed_since_millis = ms;
+                    button->pressed_since_micros = us;
                     if (button->button_function == FUNC_RE_CLOCK) {
                         /* If this was the clock for the rotary encoder, read
                            the data pin now rather than when we're satisfied
@@ -801,7 +868,9 @@ void loop() {
                         re_data_value_last_clock = digitalRead(PIN_QM_RE_DATA);
                     }
                 }
-                if (!button->event_delivered && time_elapsed(button->pressed_since_millis, ms) >= button->press_threshold_ms) {
+                if (!button->event_delivered &&
+                        (button->press_threshold_ms == 0 ||
+                         time_elapsed(button->pressed_since_micros, us) / 1000 >= button->press_threshold_ms)) {
                     /* Button has been continuously pressed long enough that we
                        can consider it an actual press, not crazy bouncing
                        noise */
@@ -1037,6 +1106,17 @@ void loop() {
             }
             interrupts();
 
+#ifndef BOZ_ORIGINAL
+            /* The button input pins are connected to the interrupt pin through
+               the switches. When going to sleep, we'll make the interrupt pin
+               an input, and the I/O pins output low. */
+            pinMode(PIN_BUTTON_INT, INPUT_PULLUP);
+            for (int i = 0; i < num_switch_pins; ++i) {
+                pinMode(switch_pins[i], OUTPUT);
+                digitalWrite(switch_pins[i], LOW);
+            }
+#endif
+
             /* We want interrupts when any button is pressed (pin D2 is low) or
                the rotary knob is turned (pin D3 falls) */
             attachInterrupt(digitalPinToInterrupt(PIN_BUTTON_INT), button_int_handler, LOW);
@@ -1045,7 +1125,10 @@ void loop() {
             /* If we get an interrupt between enabling interrupts and calling
                sleep_cpu(), the interrupt handler will have disabled sleep mode,
                so we don't now go to sleep and miss the interrupt. */
+
+#ifdef BOZ_ORIGINAL
             digitalWrite(LED_BUILTIN, LOW);
+#endif
 
             while (!boz_wake) {
                 /* Only carry on with the main loop when boz_wake is 1,
@@ -1056,7 +1139,9 @@ void loop() {
                 sleep_cpu();
             }
 
+#ifdef BOZ_ORIGINAL
             digitalWrite(LED_BUILTIN, HIGH);
+#endif
 
             sleep_disable();
 
@@ -1067,6 +1152,17 @@ void loop() {
 
             /* Disable TIMER1 overflow interrupt */
             TIMSK1 &= ~(1 << TOIE1);
+
+#ifndef BOZ_ORIGINAL
+            /* Set the interrupt pin to output LOW and the I/O pins to
+               INPUT_PULLUP, so that we can tell which button if any
+               woke us up. */
+            pinMode(PIN_BUTTON_INT, OUTPUT);
+            digitalWrite(PIN_BUTTON_INT, LOW);
+            for (int i = 0; i < num_switch_pins; ++i) {
+                pinMode(switch_pins[i], INPUT_PULLUP);
+            }
+#endif
         }
     }
 }

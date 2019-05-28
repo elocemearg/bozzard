@@ -1,6 +1,8 @@
 #include "boz_shiftreg.h"
 #include "boz_pins.h"
 
+#ifdef BOZ_ORIGINAL
+
 /* 8-bit shift register connected to pins PIN_SR_DATA, PIN_SR_CLOCK and
    PIN_SR_LATCH. */
 
@@ -55,3 +57,12 @@ boz_shift_reg_bit_clear(byte which_bit) {
     shift_reg_value &= ~(1 << which_bit);
     boz_shift_reg_write();
 }
+
+#else
+
+/* Shift register doesn't exist */
+void
+boz_shift_reg_init(void) {
+}
+
+#endif

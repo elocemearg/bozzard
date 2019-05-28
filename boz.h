@@ -221,13 +221,13 @@ boz_set_event_handler_sound_queue_not_full(void (*handler)(void *));
  * ignored.
  *
  * If the button is currently considered pressed, this function returns 1
- * and, if pressed_since_millis_r is not NULL, *pressed_since_millis_r is set
- * to the value of millis() since when the button was continually pressed.
+ * and, if pressed_since_micros_r is not NULL, *pressed_since_micros_r is set
+ * to the value of micros() since when the button was continually pressed.
  * If the button is NOT currently considered pressed, we return 0 and the
- * value of *pressed_since_millis_r is undefined.
+ * value of *pressed_since_micros_r is undefined.
  */
 int
-boz_is_button_pressed(int button_func, int buzzer_id, unsigned long *pressed_since_millis_r);
+boz_is_button_pressed(int button_func, int buzzer_id, unsigned long *pressed_since_micros_r);
 
 /* boz_set_alarm
  * Tell the main loop to call a handler a certain number of milliseconds
