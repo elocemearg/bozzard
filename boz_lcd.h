@@ -13,4 +13,12 @@ boz_lcd_init();
 void
 boz_lcd_set_cgram_address(byte address);
 
+#ifndef BOZ_ORIGINAL
+int
+boz_lcd_get_backlight_state(void);
+
+void
+boz_lcd_set_backlight_state(int);
+#endif
+
 #endif

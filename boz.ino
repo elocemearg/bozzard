@@ -885,6 +885,19 @@ void loop() {
                         }
                         button->event_delivered = 1;
                     }
+#ifndef BOZ_ORIGINAL
+                    else if (button->button_function == FUNC_RE_KEY &&
+                            boz_is_button_pressed(FUNC_YELLOW, 0, NULL)) {
+                        /* Special case if the rotary encoder key is pressed
+                           while the yellow button is held down: this means
+                           toggle the lcd backlight. */
+                        boz_lcd_set_backlight_state(!boz_lcd_get_backlight_state());
+
+                        /* Don't actually deliver this to the application,
+                           just pretend we did. */
+                        button->event_delivered = 1;
+                    }
+#endif
                     else {
                         deliver_button_event(button);
                     }

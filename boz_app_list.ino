@@ -9,10 +9,8 @@
 const PROGMEM struct boz_app app_list[] = {
     { "Menu", main_menu_init, 0 },
     { "Conundrum", conundrum_init, BOZ_APP_MAIN },
-    { "Buzzer round", br_init, BOZ_APP_MAIN },
-#ifdef BOZ_ORIGINAL
+    { "Buzzer round", buzzer_round_init, BOZ_APP_MAIN },
     { "Chess clocks", chess_init, BOZ_APP_MAIN },
-#endif
     { "Test", test_init, 0 },
     { "Spanish Flea", music_loop_init, 0 },
     { "System info", sysinfo_init, BOZ_APP_MAIN },

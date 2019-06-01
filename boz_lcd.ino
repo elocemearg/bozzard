@@ -164,6 +164,17 @@ boz_lcd_send_nibble(unsigned int data, byte rs) {
     send_i2c(payload);
 }
 
+int
+boz_lcd_get_backlight_state(void) {
+    return backlight_on;
+}
+
+void
+boz_lcd_set_backlight_state(int value) {
+    backlight_on = value;
+    send_i2c(backlight_on ? PAYLOAD_BACKLIGHT : 0);
+}
+
 void
 boz_lcd_clear() {
     boz_lcd_send(0x01);
