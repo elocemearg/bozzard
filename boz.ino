@@ -134,9 +134,15 @@ struct boz_clock clocks[NUM_CLOCKS];
 unsigned short master_clocks_enabled = 0; // bitmask
 
 const byte BUTTON_PRESS_THRESHOLD_MS = 0;
-const byte BUTTON_RELEASE_THRESHOLD_MS = 25;
-const byte ROTARY_CLOCK_PRESS_THRESHOLD_MS = 3;
-const byte ROTARY_CLOCK_RELEASE_THRESHOLD_MS = 3;
+const byte BUTTON_RELEASE_THRESHOLD_MS = 15;
+const byte ROTARY_CLOCK_PRESS_THRESHOLD_MS = 0;
+const byte ROTARY_CLOCK_RELEASE_THRESHOLD_MS = 5;
+
+/* If the number of milliseconds between two clock pulses from the rotary
+   encoder (with the data pin indicating the same direction) is less than
+   this number of milliseconds, consider the second pulse to be accidental
+   and disregard it. */
+const byte ROTARY_TURN_MIN_GAP_MS = 15;
 
 struct button_state buttons[] = {
     { PIN_BUZZER_0,  FUNC_BUZZER, 0, BUTTON_PRESS_THRESHOLD_MS, BUTTON_RELEASE_THRESHOLD_MS, 0, 0, 0, 0, 1 },
@@ -152,6 +158,8 @@ struct button_state buttons[] = {
 const int num_buttons = sizeof(buttons) / sizeof(buttons[0]);
 
 int re_data_value_last_clock = HIGH;
+unsigned long re_last_turn_high_ms = 0;
+unsigned long re_last_turn_low_ms = 0;
 
 struct app_context app_context_stack[APP_CONTEXT_STACK_SIZE];
 
@@ -875,13 +883,25 @@ void loop() {
                        can consider it an actual press, not crazy bouncing
                        noise */
                     if (button->button_function == FUNC_RE_CLOCK) {
-                        /* We've seen a rising edge of the rotary encoder's
-                           clock pin, and we're now satisfied it's a real
-                           signal rather than a bounce. re_data_value_last_clock
+                        unsigned long *last_turn_ms;
+                        /* We've seen a falling edge of the rotary encoder's
+                           clock pin. Provided this is at least
+                           ROTARY_TURN_MIN_GAP_MS after the last time we
+                           decided the rotary encoder had been turned the same
+                           way, we're now satisfied it's a real signal rather
+                           than a bounce. re_data_value_last_clock
                            contains the value on the data pin at the point we
                            received the clock signal. */
-                        if (app_context->event_qm_rotary) {
-                            app_context->event_qm_rotary(app_context->event_cookie, re_data_value_last_clock == HIGH);
+                        if (re_data_value_last_clock == HIGH)
+                            last_turn_ms = &re_last_turn_high_ms;
+                        else
+                            last_turn_ms = &re_last_turn_low_ms;
+
+                        if (time_elapsed(*last_turn_ms, ms) >= ROTARY_TURN_MIN_GAP_MS) {
+                            if (app_context->event_qm_rotary) {
+                                app_context->event_qm_rotary(app_context->event_cookie, re_data_value_last_clock == HIGH);
+                            }
+                            *last_turn_ms = ms;
                         }
                         button->event_delivered = 1;
                     }
