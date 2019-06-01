@@ -478,6 +478,13 @@ static void attach_clock_update_alarm(struct boz_clock *clock, int which_player)
     */
     alarm_ms = value_ms - mod + 10;
 
+    /* If the alarm time is greater than (i.e. earlier than) the clock value
+       (this can happen if at 123.005 seconds we set the alarm, which will end
+       up being at 123.010 seconds) then we really want the alarm at the next
+       200ms + 10 boundary, so 122.810 seconds. */
+    if (alarm_ms >= value_ms)
+        alarm_ms -= step_ms;
+
     boz_clock_set_alarm(clock, alarm_ms, clock_update_alarm);
 }
 
@@ -495,6 +502,8 @@ static void attach_delay_update_alarm(struct boz_clock *clock) {
         if (mod == 0)
             mod = step_ms;
         alarm_ms = value_ms - mod + 10;
+        if (alarm_ms >= value_ms)
+            alarm_ms -= step_ms;
     }
 
     if (!(alarm_ms == 0 && value_ms == 0))
@@ -506,14 +515,13 @@ static void flag_fall(struct chess_state *state, int which_player) {
         state->flags[0] = 1;
         boz_sound_note(NOTE_C4, 800);
         boz_display_set_cursor(FLAG_ROW, FLAG_LEFT_COL);
-        boz_display_write_char(FLAG_CHAR);
     }
     else {
         state->flags[1] = 1;
         boz_sound_note(NOTE_G4, 800);
         boz_display_set_cursor(FLAG_ROW, FLAG_RIGHT_COL);
-        boz_display_write_char(FLAG_CHAR);
     }
+    boz_display_write_char(FLAG_CHAR);
 }
 
 static void chess_clock_expired(void *cookie, struct boz_clock *clock) {
@@ -528,7 +536,7 @@ static void chess_clock_expired(void *cookie, struct boz_clock *clock) {
 }
 
 void chess_redraw(struct chess_state *state) {
-    int turn;
+    char turn;
 
     boz_display_clear();
 
@@ -540,7 +548,7 @@ void chess_redraw(struct chess_state *state) {
         turn = state->whose_turn_before_stopped;
 
     if (state->delay_clock && turn >= 0) {
-        if (!state->delay_expired[turn]) {
+        if (!state->delay_expired[(int) turn]) {
             redraw_delay_clock(state, state->delay_clock);
         }
     }

@@ -21,9 +21,6 @@
 #define BOZ_NUM_CHAR_PATTERNS 7
 const PROGMEM byte boz_char_patterns[][8] = {
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }, // 0: blank
-    /*{ 0x03, 0x07, 0x0f, 0x1f, 0x0f, 0x07, 0x03, 0x00 }, // 1: back triangle
-    { 0x18, 0x1c, 0x1e, 0x1f, 0x1e, 0x1c, 0x18, 0x00 }, // 2: play triangle
-    */
     { 0x01, 0x03, 0x07, 0x0f, 0x07, 0x03, 0x01, 0x00 }, // 1: back triangle
     { 0x10, 0x18, 0x1c, 0x1e, 0x1c, 0x18, 0x10, 0x00 }, // 2: play triangle
     { 0x00, 0x00, 0x1f, 0x1f, 0x1f, 0x00, 0x00, 0x00 }, // 3: thick horiz bar
@@ -89,7 +86,7 @@ struct disp_cmd_state {
 
 struct button_state {
     /* Pin for this button */
-    int pin;
+    byte pin;
 
     /* Function of this button, e.g. FUNC_BUZZER or FUNC_PLAY */
     byte button_function;
@@ -131,7 +128,7 @@ struct disp_cmd_state disp_cmd_state;
 /* General-purpose clocks for use by applications. There are NUM_CLOCKS clocks,
    to be shared between all applications currently in memory. */
 struct boz_clock clocks[NUM_CLOCKS];
-unsigned short master_clocks_enabled = 0; // bitmask
+unsigned int master_clocks_enabled = 0; // bitmask
 
 const byte BUTTON_PRESS_THRESHOLD_MS = 0;
 const byte BUTTON_RELEASE_THRESHOLD_MS = 15;
@@ -176,7 +173,7 @@ void *app_call_return_cookie = NULL;
 /* Set to 1 by boz_app_exit(). When the main loop regains control, we will
    take care of tearing down the just-exited app and passing its exit status
    to the calling app. */
-int app_exited = 0;
+byte app_exited = 0;
 int app_exit_status = 0;
 
 static void memzero(void *p, size_t n) {
@@ -284,7 +281,7 @@ boz_leds_set(int mask) {
 }
 #else
 
-int leds_to_pins[] = { PIN_LED_R, PIN_LED_G, PIN_LED_Y, PIN_LED_B };
+byte leds_to_pins[] = { PIN_LED_R, PIN_LED_G, PIN_LED_Y, PIN_LED_B };
 
 void
 boz_led_set(int which_led, int on) {
@@ -640,11 +637,11 @@ ISR(TIMER1_OVF_vect) {
     sleep_disable();
 }
 
-int read_turny_push_button(void) {
+byte read_turny_push_button(void) {
 #ifdef BOZ_ORIGINAL
     return digitalRead(PIN_QM_RE_KEY);
 #else
-    int value;
+    byte value;
     pinMode(PIN_BUTTON_INT, INPUT);
     value = digitalRead(PIN_QM_RE_KEY);
     pinMode(PIN_BUTTON_INT, OUTPUT);
@@ -653,22 +650,29 @@ int read_turny_push_button(void) {
 #endif
 }
 
-static int read_button_value(int pin) {
+static byte read_button_value(int pin) {
     if (pin == PIN_QM_RE_KEY)
         return read_turny_push_button();
     else
         return digitalRead(pin);
 }
 
+const byte switch_pins[] = {
+    PIN_BUZZER_0,
+    PIN_BUZZER_1,
+    PIN_BUZZER_2,
+    PIN_BUZZER_3,
+    PIN_QM_PLAY,
+    PIN_QM_YELLOW,
+    PIN_QM_RESET
+};
+#define num_switch_pins ((int) (sizeof(switch_pins) / sizeof(switch_pins[0])))
+
 void setup() {
     /* Set our button inputs as inputs */
-    pinMode(PIN_BUZZER_0, INPUT_PULLUP);
-    pinMode(PIN_BUZZER_1, INPUT_PULLUP);
-    pinMode(PIN_BUZZER_2, INPUT_PULLUP);
-    pinMode(PIN_BUZZER_3, INPUT_PULLUP);
-    pinMode(PIN_QM_PLAY, INPUT_PULLUP);
-    pinMode(PIN_QM_YELLOW, INPUT_PULLUP);
-    pinMode(PIN_QM_RESET, INPUT_PULLUP);
+    for (int i = 0; i < num_switch_pins; ++i) {
+        pinMode(switch_pins[i], INPUT_PULLUP);
+    }
     pinMode(PIN_QM_RE_CLOCK, INPUT_PULLUP);
     pinMode(PIN_QM_RE_DATA, INPUT_PULLUP);
     pinMode(PIN_QM_RE_KEY, INPUT_PULLUP);
@@ -698,9 +702,11 @@ void setup() {
     boz_leds_set(0);
 #endif
 
+#ifdef BOZ_ORIGINAL
     /* Initialise shift register - this will also set the appropriate pin
        modes on the pins we use to control the shift register */
     boz_shift_reg_init();
+#endif
 
     /* Initialise the LCD */
     boz_lcd_init();
@@ -723,22 +729,11 @@ void setup() {
     }
 }
 
-const byte switch_pins[] = {
-    PIN_BUZZER_0,
-    PIN_BUZZER_1,
-    PIN_BUZZER_2,
-    PIN_BUZZER_3,
-    PIN_QM_PLAY,
-    PIN_QM_YELLOW,
-    PIN_QM_RESET
-};
-#define num_switch_pins ((int) (sizeof(switch_pins) / sizeof(switch_pins[0])))
-
 void loop() {
     unsigned long ms, us;
     unsigned long next_wake_ms, next_wake_us;
-    int next_wake_ms_set = 0, next_wake_us_set = 0;
-    int buttons_busy = 0;
+    byte next_wake_ms_set = 0, next_wake_us_set = 0;
+    byte buttons_busy = 0;
 
     ms = millis();
     us = micros();
@@ -789,7 +784,7 @@ void loop() {
 
     /* If the app has any clocks running, check them for any events */
     if (app_context && app_context->clocks_enabled) {
-        for (int clock_index = 0; clock_index < NUM_CLOCKS; ++clock_index) {
+        for (byte clock_index = 0; clock_index < NUM_CLOCKS; ++clock_index) {
             if (app_context->clocks_enabled & (1 << clock_index)) {
                 struct boz_clock *clock = &clocks[clock_index];
                 long value = boz_clock_value(clock);
@@ -844,7 +839,7 @@ void loop() {
         /* Check if any buttons have changed state since we last checked */
         for (int i = 0; i < num_buttons; ++i) {
             struct button_state *button = &buttons[i];
-            int bval = read_button_value(button->pin);
+            byte bval = read_button_value(button->pin);
 
             if (bval == (button->active_low ? HIGH : LOW)) {
                 if (button->is_pressed) {
@@ -1017,7 +1012,7 @@ void loop() {
          * Any buzzer or button is pressed, or the rotary knob is turned.
     */
 
-    int can_sleep = 1;
+    byte can_sleep = 1;
 
     /* In case the many event handlers we might have called above took a long
        time to run, update ms and us */

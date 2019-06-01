@@ -900,8 +900,8 @@ con_generate_target(void *cookie) {
     if (!prng_seeded) {
         /* Current time in microseconds plus 1009 times the analog value on an
            unconnected pin gives us a (somewhat) random initial seed. */
-        pinMode(A6, INPUT);
-        randomSeed(micros() + 1009L * (long) analogRead(A6));
+        pinMode(A7, INPUT);
+        randomSeed(micros() + 1009L * (long) analogRead(A7));
         prng_seeded = 1;
     }
 
