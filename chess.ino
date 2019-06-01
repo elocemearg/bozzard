@@ -468,7 +468,15 @@ static void attach_clock_update_alarm(struct boz_clock *clock, int which_player)
         mod = -value_ms % step_ms;
         mod = step_ms - mod;
     }
-    alarm_ms = value_ms - mod;
+
+    /* Set the alarm for when the clock's value is e.g. 123.010 seconds, not
+       123.000, so that if it takes more than 1ms to wake up and be called, we
+       don't end up displaying 122 seconds. If the alarm time is exactly on
+       a multiple of 200ms, it can lead to the seconds appearing to change
+       irregularly, e.g.:
+       2:03 (wait 1000ms) 2:02 (wait 800ms) 2:01 (wait 1200ms) 2:00
+    */
+    alarm_ms = value_ms - mod + 10;
 
     boz_clock_set_alarm(clock, alarm_ms, clock_update_alarm);
 }
@@ -477,17 +485,16 @@ static void attach_delay_update_alarm(struct boz_clock *clock) {
     static const int step_ms = 200;
     long value_ms = boz_clock_value(clock);
     long alarm_ms;
+    int mod = value_ms % step_ms;
 
     if (boz_clock_is_direction_forwards(clock)) {
-        int mod = value_ms % step_ms;
         mod = step_ms - mod;
         alarm_ms = value_ms + mod;
     }
     else {
-        int mod = value_ms % step_ms;
         if (mod == 0)
             mod = step_ms;
-        alarm_ms = value_ms - mod;
+        alarm_ms = value_ms - mod + 10;
     }
 
     if (!(alarm_ms == 0 && value_ms == 0))
