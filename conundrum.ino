@@ -119,7 +119,7 @@ const PROGMEM struct game_rules conundrum_rules = {
     1,    // show_buzz_time
     1,    // yellow_generates_target
     1,    // two_sides
-    1,    // first_c2_buzzer
+    2,    // first_c2_buzzer (2): red and green are C1, yellow and blue are C2
     0,    // buzzer_noise
 };
 
