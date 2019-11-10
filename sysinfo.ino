@@ -4,10 +4,10 @@
 
 /* If the voltage at VIN is below this, we'll assume we're running from USB
    and the battery isn't switched on. The Arduino Nano can run with 7V-12V at
-   VIN. The Bozzer control unit has 6xAA batteries (9V). */
+   VIN. The Bozzard control unit has a 9V supply. */
 #define VIN_MIN_MV 6000
 
-const PROGMEM char s_sysinfo_boz[] = "BOZZER ";
+const PROGMEM char s_sysinfo_boz[] = "BOZZARD";
 const PROGMEM char s_sysinfo_battery[] = "Battery:";
 const PROGMEM char s_sysinfo_off[] = " off    ";
 const PROGMEM char s_compilation_date[] = __DATE__;
@@ -34,7 +34,7 @@ sysinfo_refresh(void *cookie) {
 
     boz_display_clear();
 
-    /* Write BOZZER followed by the date the software was compiled */
+    /* Write BOZZARD followed by the date the software was compiled */
     boz_display_write_string_P(s_sysinfo_boz);
     for (int i = 0; i < 3; ++i) {
         for (int p = date_offsets[i]; p < date_offsets[i] + date_lengths[i]; ++p) {
