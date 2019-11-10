@@ -714,10 +714,11 @@ void setup() {
     boz_env_reset();
 
     /* Set app_call_defer_init to the init function of the first application
-       to run. This is normally the main menu app, unless the user is
-       holding down the reset button when the unit is switched on, in which
-       case we start the test application, or if the user is holding down the
-       yellow button, in which case we play some music. */
+       to run. This is the main menu app. I've commented out the logic to
+       start with a different app if certain buttons are held down (the test
+       app if it's the reset button, the music loop if it's the yellow
+       button) */
+    /*
     if (digitalRead(PIN_QM_RESET) == LOW) {
         app_call_defer_init = test_init;
     }
@@ -727,6 +728,8 @@ void setup() {
     else {
         app_call_defer_init = main_menu_init;
     }
+    */
+    app_call_defer_init = main_menu_init;
 }
 
 void loop() {
