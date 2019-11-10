@@ -1,4 +1,5 @@
 #include "boz.h"
+#include "options.h"
 #include <avr/pgmspace.h>
 
 /* No increment. */

@@ -595,10 +595,9 @@ static void make_buzzer_noise(int noise, int buzzer) {
     switch (noise) {
         default:
         case BUZZER_NOISE_DEFAULT: {
-            byte arp[] = { NOTE_D6, NOTE_D7, NOTE_D4, NOTE_D5 };
-            for (int i = 0; i < 4; ++i) {
-                arp[i] += buzzer * 3;
-            }
+            byte arp[] = { NOTE_B6, NOTE_E3, NOTE_B6, NOTE_E4 };
+            arp[1] += buzzer * 12;
+            arp[3] += buzzer * 12;
             boz_sound_arpeggio(arp, 4, 100, rules.buzz_length_tenths);
         }
         break;
