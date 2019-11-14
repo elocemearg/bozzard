@@ -16,7 +16,7 @@
 #define SND_CMD_QUEUE_SIZE 16
 #define DISP_CMD_QUEUE_SIZE 96
 #define APP_CONTEXT_STACK_SIZE 4
-#define NUM_CLOCKS 4 // must be less than the number of bits in an int
+#define NUM_CLOCKS BOZ_NUM_CLOCKS // must be less than the number of bits in an int
 
 #define BOZ_NUM_CHAR_PATTERNS 7
 const PROGMEM byte boz_char_patterns[][8] = {
@@ -163,9 +163,11 @@ struct app_context app_context_stack[APP_CONTEXT_STACK_SIZE];
 /* current app context */
 struct app_context *app_context = NULL;
 
-/* If an app calls another app, the init function and cookie go in here 
-   until the app hands back control to us. */
-void (*app_call_defer_init)(void *) = NULL;
+/* If an app calls another app, the app's init function, flags etc go in
+   app_to_call_data, and app_call_defer points to it. We set app_call_defer
+   back to NULL, and transfer control to the called app. */
+const struct boz_app *app_call_defer = NULL;
+struct boz_app app_to_call_data;
 void *app_call_defer_init_cookie = NULL;
 void (*app_call_return)(void *, int) = NULL;
 void *app_call_return_cookie = NULL;
@@ -175,6 +177,10 @@ void *app_call_return_cookie = NULL;
    to the calling app. */
 byte app_exited = 0;
 int app_exit_status = 0;
+
+#ifdef BOZ_SERIAL
+volatile byte serial_data_available = 0;
+#endif
 
 static void memzero(void *p, size_t n) {
     unsigned char *pc = (unsigned char *) p;
@@ -347,6 +353,13 @@ boz_set_event_handler_sound_queue_not_full(void (*handler)(void *)) {
     app_context->event_sound_queue_not_full = handler;
 }
 
+#ifdef BOZ_SERIAL
+void
+boz_set_event_handler_serial_data_available(void (*handler)(void *)) {
+    app_context->event_serial_data_available = handler;
+}
+#endif
+
 void
 boz_set_alarm(long ms_from_now, void (*handler)(void *), void *cookie) {
     if (ms_from_now >= 0) {
@@ -366,13 +379,17 @@ boz_cancel_alarm() {
 }
 
 int
-boz_app_call(void (*init)(void *), void *param, void (*return_callback)(void *, int), void *return_callback_cookie) {
+boz_app_call(int app_id, void *param, void (*return_callback)(void *, int), void *return_callback_cookie) {
     if (app_context - app_context_stack >= APP_CONTEXT_STACK_SIZE - 1) {
         // already at the maximum app nesting level
         return -1;
     }
 
-    app_call_defer_init = init;
+    if (boz_app_lookup_id(app_id, &app_to_call_data) != 0) {
+        // no such app
+        return -1;
+    }
+    app_call_defer = &app_to_call_data;
     app_call_defer_init_cookie = param;
     app_call_return = return_callback;
     app_call_return_cookie = return_callback_cookie;
@@ -713,7 +730,11 @@ void setup() {
 
     boz_env_reset();
 
-    /* Set app_call_defer_init to the init function of the first application
+#ifdef BOZ_SERIAL
+    boz_serial_init();
+#endif
+
+    /* Set app_call_defer to the struct of the first application
        to run. This is the main menu app. I've commented out the logic to
        start with a different app if certain buttons are held down (the test
        app if it's the reset button, the music loop if it's the yellow
@@ -729,7 +750,13 @@ void setup() {
         app_call_defer_init = main_menu_init;
     }
     */
-    app_call_defer_init = main_menu_init;
+    if (boz_app_lookup_id(BOZ_APP_ID_INIT, &app_to_call_data) != 0) {
+        // No initial app?
+        boz_leds_set(1);
+    }
+    else {
+        app_call_defer = &app_to_call_data;
+    }
 }
 
 void loop() {
@@ -784,6 +811,26 @@ void loop() {
             }
         }
     } while (disp_cmd_state.running && time_passed(us, disp_cmd_state.next_step_micros));
+
+#ifdef BOZ_SERIAL
+    /* If we have serial data to send and we can send it, then do so */
+    boz_serial_service_send();
+
+    /* If we have data available on the serial port, then tell the application
+       if it's interested. If it's not interested, then throw away the data. */
+    if (serial_data_available) {
+        if (app_context && app_context->event_serial_data_available) {
+            app_context->event_serial_data_available(app_context->event_cookie);
+            if (Serial.available() == 0)
+                serial_data_available = 0;
+        }
+        else {
+            while (Serial.available() > 0)
+                Serial.read();
+            serial_data_available = 0;
+        }
+    }
+#endif
 
     /* If the app has any clocks running, check them for any events */
     if (app_context && app_context->clocks_enabled) {
@@ -949,7 +996,7 @@ void loop() {
         app_context_tear_down(app_context);
 
         /* You can't call another app in the same call as exiting */
-        app_call_defer_init = NULL;
+        app_call_defer = NULL;
         app_exited = 0;
 
         if (app_context > app_context_stack) {
@@ -970,8 +1017,8 @@ void loop() {
     }
 
     /* Has this app, or the app that just exited, called another app? */
-    if (app_call_defer_init != NULL) {
-        void (*next_app_init)(void *) = app_call_defer_init;
+    if (app_call_defer != NULL) {
+        void (*next_app_init)(void *) = app_call_defer->init;
 
         if (app_context == NULL) {
             /* This is the initial app */
@@ -988,7 +1035,11 @@ void loop() {
 
         app_context_init(app_context);
 
-        app_call_defer_init = NULL;
+        if (app_call_defer->flags & BOZ_APP_NO_SLEEP) {
+            app_context->forbid_sleep = 1;
+        }
+
+        app_call_defer = NULL;
 
         next_app_init(app_call_defer_init_cookie);
     }
@@ -1022,7 +1073,7 @@ void loop() {
     ms = millis();
     us = micros();
 
-    if (buttons_busy)
+    if (buttons_busy || app_context->forbid_sleep)
         can_sleep = 0;
     else if (disp_cmd_state.running || !queue_is_empty(&disp_cmd_queue.qstate))
         can_sleep = 0;
@@ -1198,3 +1249,8 @@ void loop() {
     }
 }
 
+#ifdef BOZ_SERIAL
+void serialEvent() {
+    serial_data_available = 1;
+}
+#endif

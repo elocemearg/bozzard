@@ -886,7 +886,7 @@ con_rotary_press(void *cookie) {
         else
             con_options_context.num_options = CON_OPTIONS_INDEX_WHICH_BUZZERS;
 
-        if (boz_app_call(option_menu_init, &con_options_context, con_options_return_callback, state)) {
+        if (boz_app_call(BOZ_APP_ID_OPTION_MENU, &con_options_context, con_options_return_callback, state)) {
             // lolfail
         }
     }

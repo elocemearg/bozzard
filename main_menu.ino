@@ -129,7 +129,7 @@ void
 mm_play_handler(void *cookie) {
     struct boz_app app;
     mm_load_app(&app, mm_app_cursor);
-    boz_app_call(app.init, NULL, mm_return_callback, NULL);
+    boz_app_call(app.id, NULL, mm_return_callback, NULL);
 }
 
 void

@@ -8,4 +8,8 @@
 
 //#define BOZ_ORIGINAL
 
+/* Define BOZ_SERIAL to include the PC Control app, and all the various
+ * serial port-related code. */
+//#define BOZ_SERIAL
+
 #endif

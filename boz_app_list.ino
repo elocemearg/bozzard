@@ -1,3 +1,4 @@
+#include "boz_hw.h"
 #include "boz_app.h"
 
 #include <avr/pgmspace.h>
@@ -6,13 +7,30 @@
 
 #define APP_LIST_LENGTH (sizeof(app_list) / sizeof(app_list[0]))
 
+extern void main_menu_init(void *);
+extern void conundrum_init(void *);
+extern void test_init(void *);
+extern void buzzer_round_init(void *);
+extern void chess_init(void *);
+extern void option_menu_init(void *);
+extern void music_loop_init(void *);
+extern void sysinfo_init(void *);
+
+#ifdef BOZ_SERIAL
+extern void pcc_init(void *);
+#endif
+
 const PROGMEM struct boz_app app_list[] = {
-    { "Menu", main_menu_init, 0 },
-    { "Conundrum", conundrum_init, BOZ_APP_MAIN },
-    { "Buzzer round", buzzer_round_init, BOZ_APP_MAIN },
-    { "Chess clocks", chess_init, BOZ_APP_MAIN },
-    { "System info", sysinfo_init, BOZ_APP_MAIN },
-    { "Option menu", option_menu_init, 0 },
+    { BOZ_APP_ID_MAIN_MENU, "Menu", main_menu_init, 0 },
+#ifdef BOZ_SERIAL
+    { BOZ_APP_ID_PC_CONTROL, "PC control", pcc_init, BOZ_APP_MAIN | BOZ_APP_NO_SLEEP },
+#else
+    { BOZ_APP_ID_CONUNDRUM, "Conundrum", conundrum_init, BOZ_APP_MAIN },
+    { BOZ_APP_ID_BUZZER_ROUND, "Buzzer round", buzzer_round_init, BOZ_APP_MAIN },
+    { BOZ_APP_ID_CHESS_CLOCKS, "Chess clocks", chess_init, BOZ_APP_MAIN },
+#endif
+    { BOZ_APP_ID_SYSINFO, "System info", sysinfo_init, BOZ_APP_MAIN },
+    { BOZ_APP_ID_OPTION_MENU, "Option menu", option_menu_init, 0 },
 };
 
 #if 0
@@ -41,6 +59,17 @@ boz_app_entry_fetch_by_name(struct boz_app *dest, const char *name) {
     return 0;
 }
 #endif
+
+int
+boz_app_lookup_id(int id, struct boz_app *dest) {
+    for (int i = 0; i < (int) APP_LIST_LENGTH; ++i) {
+        if ((int) pgm_read_word_near(&app_list[i].id) == id) {
+            memcpy_P(dest, &app_list[i], sizeof(struct boz_app));
+            return 0;
+        }
+    }
+    return -1;
+}
 
 const struct boz_app *
 boz_app_list_get(void) {

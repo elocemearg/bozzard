@@ -1,13 +1,15 @@
 #ifndef _BOZ_APP_INITS_H
 #define _BOZ_APP_INITS_H
 
-void main_menu_init(void *);
-void conundrum_init(void *);
-void test_init(void *);
-void buzzer_round_init(void *);
-void chess_init(void *);
-void option_menu_init(void *);
-void music_loop_init(void *);
-void sysinfo_init(void *);
+enum BOZ_APP_ID {
+    BOZ_APP_ID_MAIN_MENU = 0,
+    BOZ_APP_ID_PC_CONTROL,
+    BOZ_APP_ID_CONUNDRUM,
+    BOZ_APP_ID_BUZZER_ROUND,
+    BOZ_APP_ID_CHESS_CLOCKS,
+    BOZ_APP_ID_SYSINFO,
+    BOZ_APP_ID_OPTION_MENU
+};
+#define BOZ_APP_ID_INIT 0
 
 #endif

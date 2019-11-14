@@ -1,6 +1,9 @@
 #ifndef _BOZ_DISPLAY_H
 #define _BOZ_DISPLAY_H
 
+#define BOZ_DISPLAY_ROWS 2
+#define BOZ_DISPLAY_COLUMNS 16
+
 /* The following functions add commands to the display commands queue. The
  * main loop takes commands off the queue and runs them, only executing the
  * next command when the previous command is known to have completed.

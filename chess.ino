@@ -353,7 +353,7 @@ chess_init(void *dummy) {
     chess_state.clocks[0] = NULL;
     chess_state.clocks[1] = NULL;
     chess_state.delay_clock = NULL;
-    boz_app_call(option_menu_init, &preset_menu_context, chess_init_callback, NULL);
+    boz_app_call(BOZ_APP_ID_OPTION_MENU, &preset_menu_context, chess_init_callback, NULL);
 }
 
 static void print_clock_value(long value_ms, const struct chess_clock_format *format_array) {
@@ -731,7 +731,7 @@ chess_reset(void *cookie) {
     struct chess_state *state = (struct chess_state *) cookie;
     if (!state->clocks_have_started) {
         /* Go back into the preset menu, and then to chess_init_callback */
-        boz_app_call(option_menu_init, &preset_menu_context, chess_init_callback, NULL);
+        boz_app_call(BOZ_APP_ID_OPTION_MENU, &preset_menu_context, chess_init_callback, NULL);
     }
     else {
         /* Reset the clock to its initial state */
@@ -764,7 +764,7 @@ chess_rotary_press(void *cookie) {
         clock_settings_results[CLOCK_SETTINGS_INCREMENT_MODE] = state->rules.increment_mode;
         clock_settings_results[CLOCK_SETTINGS_INCREMENT_TIME] = state->rules.increment_ms / 1000;
         clock_settings_results[CLOCK_SETTINGS_ALLOW_NEGATIVE] = state->rules.allow_negative;
-        boz_app_call(option_menu_init, &clock_settings_menu_context, chess_settings_callback, state);
+        boz_app_call(BOZ_APP_ID_OPTION_MENU, &clock_settings_menu_context, chess_settings_callback, state);
     }
 }
 

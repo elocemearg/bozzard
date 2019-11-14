@@ -1,10 +1,18 @@
 #ifndef _APP_H
 #define _APP_H
 
+#include "boz_hw.h"
+
 /* bits for boz_app.flags */
+
+/* List this app in the main menu */
 #define BOZ_APP_MAIN 1
 
+/* Do not put the MCU to sleep while this app is running */
+#define BOZ_APP_NO_SLEEP 2
+
 struct boz_app {
+    int id;
     char name[16];
     void (*init)(void *);
     unsigned int flags;
@@ -21,6 +29,9 @@ struct app_context {
     void *alarm_handler_cookie;
     unsigned long alarm_time_millis;
     void (*alarm_handler)(void *cookie);
+
+    /* If true, the MCU will not be put to sleep while this app is running. */
+    char forbid_sleep;
 
     /* Opaque pointer passed to all the event_* handlers that handle
      * button presses. */
@@ -55,6 +66,10 @@ struct app_context {
      * re-attach itself in the event handler. */
     void (*event_sound_queue_not_full)(void *cookie);
 
+#ifdef BOZ_SERIAL
+    /* Data is available to read on the serial port */
+    void (*event_serial_data_available)(void *cookie);
+#endif
 
     /* If this app has called another one, we'll call this handler when the
      * called app returns. */

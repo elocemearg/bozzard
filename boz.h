@@ -1,9 +1,11 @@
 #ifndef _BOZ_H
 #define _BOZ_H
 
+#include "boz_hw.h"
 #include "boz_display.h"
 #include "boz_sound.h"
 #include "boz_clock.h"
+#include "boz_serial.h"
 
 #define FUNC_BUZZER 0
 #define FUNC_PLAY 1
@@ -25,6 +27,10 @@
 #define BOZ_CHAR_RESET_S "\x04"
 #define BOZ_CHAR_WHEEL_AC_S "\x05"
 #define BOZ_CHAR_WHEEL_C_S "\x06"
+
+#define BOZ_NUM_BUZZERS 4
+#define BOZ_NUM_CLOCKS 4
+#define BOZ_NUM_LEDS 4
 
 /* Applications should not need to use boz_sound_enqueue() directly - instead,
  * use one of the helper functions declared in boz_sound.h. */
@@ -202,6 +208,15 @@ boz_set_event_handler_qm_rotary_press(void (*handler)(void *));
 void
 boz_set_event_handler_sound_queue_not_full(void (*handler)(void *));
 
+/* boz_set_event_handler_serial_data_available
+ * Set the event handler to be called when there is data to read on the
+ * serial port.
+ * This event handler does not detach itself automatically.
+ * The cookie passed to the handler is the pointer given to the last call
+ * to boz_set_event_cookie(). */
+void
+boz_set_event_handler_serial_data_available(void (*handler)(void *));
+
 /* boz_is_button_pressed
  * Ask whether a button is considered "pressed" by the main loop. A button is
  * pressed if it has been active for more than a certain length of time
@@ -266,7 +281,7 @@ boz_cancel_alarm();
  * calling app during this time, their handlers will only be called after the
  * called app exits and the calling app regains control.
  *
- * init:  The init function of the application to run.
+ * app_id: the ID of the app to run, as listed in boz_app_inits.h.
  * param: The parameter to pass to the application's init function. Some
  *        applications ignore this parameter, and some, such as the options
  *        menu app, require it to point to a particular data structure.
@@ -280,7 +295,7 @@ boz_cancel_alarm();
  *                         function.
  */
 int
-boz_app_call(void (*init)(void *), void *param, void (*return_callback)(void *, int), void *return_callback_cookie);
+boz_app_call(int app_id, void *param, void (*return_callback)(void *, int), void *return_callback_cookie);
 
 
 /* boz_app_exit
