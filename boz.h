@@ -6,6 +6,7 @@
 #include "boz_sound.h"
 #include "boz_clock.h"
 #include "boz_serial.h"
+#include "boz_mm.h"
 
 #define FUNC_BUZZER 0
 #define FUNC_PLAY 1
@@ -52,7 +53,7 @@ boz_display_enqueue(unsigned int cmd_word);
  *
  * See boz_clock.h for the clock API.
  * */
-struct boz_clock *
+boz_clock
 boz_clock_create(long initial_value_ms, int direction_forwards);
 
 /* boz_clock_release
@@ -62,7 +63,7 @@ boz_clock_create(long initial_value_ms, int direction_forwards);
  * All an application's clocks are automatically stopped and released when the
  * application exits. */
 void
-boz_clock_release(struct boz_clock *clock);
+boz_clock_release(boz_clock clock);
 
 /* boz_led_set
  * Switch one of the LEDs on or off, as follows:
@@ -284,7 +285,8 @@ boz_cancel_alarm();
  * app_id: the ID of the app to run, as listed in boz_app_inits.h.
  * param: The parameter to pass to the application's init function. Some
  *        applications ignore this parameter, and some, such as the options
- *        menu app, require it to point to a particular data structure.
+ *        menu app, require it to point to a particular data structure. This
+ *        depends on the specific app.
  * return_callback: The function to be called when the called app exits. This
  *                  callback function takes two arguments: a cookie
  *                  (which will be return_callback_cookie) and a status (which
@@ -299,9 +301,12 @@ boz_app_call(int app_id, void *param, void (*return_callback)(void *, int), void
 
 
 /* boz_app_exit
- * Exit the application. Once the event handler which called boz_app_exit
- * returns, any running clocks the application had will be stopped and
- * released, and no further events will be delivered to the application.
+ * Exit the application.
+ * Once the event handler which called boz_app_exit returns:
+ *     * any running clocks the application had will be stopped and released;
+ *     * any chunks of dynamically-allocated memory obtained by a call by the
+ *       application to boz_mm_alloc() will be freed;
+ *     * no further events will be delivered to the application.
  *
  * status: If this application was started with boz_app_call, the value of
  *         "status" will be passed to the calling app's return callback
@@ -326,4 +331,12 @@ boz_app_exit(int status);
  */
 int
 boz_get_battery_voltage(void);
+
+
+/* boz_crash
+ * Run the crash application, which displays a message on the screen and
+ * sets the LEDs to the given pattern. The user has to reboot the Bozzard. */
+void
+boz_crash(int pattern);
+
 #endif

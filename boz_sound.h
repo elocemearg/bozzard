@@ -39,4 +39,10 @@ boz_sound_stop(void);
 void
 boz_sound_stop_all(void);
 
+/* Enqueue the necessary command(s) to make a standard buzzer noise that sounds
+ * almost, but not quite, entirely unlike a bell. which_buzzer must be between
+ * 0 and 3 inclusive, so that each buzzer has a slightly different pitch. */
+void
+boz_sound_square_bell(int which_buzzer);
+
 #endif

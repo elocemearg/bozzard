@@ -29,3 +29,11 @@ boz_sound_arpeggio(byte *notes, int num_notes, int duration_ms, byte num_times) 
         num_times = 1;
     return boz_sound_enqueue(0, 0, notes, num_notes, duration_ms, num_times);
 }
+
+void
+boz_sound_square_bell(int buzzer, int length_tenths_sec) {
+    byte arp[] = { NOTE_B6, NOTE_E3, NOTE_B6, NOTE_E4 };
+    arp[1] += buzzer * 12;
+    arp[3] += buzzer * 12;
+    boz_sound_arpeggio(arp, 4, 100, length_tenths_sec);
+}

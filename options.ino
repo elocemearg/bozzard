@@ -2,15 +2,19 @@
 #include "options.h"
 #include <avr/pgmspace.h>
 
-struct option_page current_page;
-int page_number = 0;
-struct option_menu_context *menu;
+struct options_state {
+    struct option_page current_page;
+    int page_number;
+    struct option_menu_context *menu;
 
-/* Zero if turning the rotary knob will move from page to page.
-   If it's 1 or more, it refers to one of the things we can select on the page,
-   and turning the knob will change that thing.
-*/
-int control_depth = 0;
+    /* Zero if turning the rotary knob will move from page to page.
+       If it's 1 or more, it refers to one of the things we can select on the
+       page, and turning the knob will change that thing.
+    */
+    int control_depth;
+};
+
+static struct options_state *options_state;
 
 
 /* Instructions for printing a clock value on the bottom row.
@@ -118,8 +122,20 @@ const PROGMEM char s_no[]  = "      No ";
 void
 option_menu_init(void *cookie) {
     struct option_menu_context *context = (struct option_menu_context *) cookie;
-    control_depth = 0;
-    om_load_page(context, 0);
+    int first_page = 0;
+
+    options_state = (struct options_state *) boz_mm_alloc(sizeof(*options_state));
+    memset(options_state, 0, sizeof(*options_state));
+
+    while (context->page_disable_mask & (1 << first_page)) {
+        ++first_page;
+    }
+    if (first_page >= context->num_options) {
+        /* No enabled pages? */
+        boz_app_exit(1);
+    }
+
+    om_load_page(context, first_page);
 
     boz_set_event_handler_qm_play(om_play);
     boz_set_event_handler_qm_yellow(om_yellow);
@@ -127,10 +143,10 @@ option_menu_init(void *cookie) {
     boz_set_event_handler_qm_rotary(om_rotary_turn);
     boz_set_event_handler_qm_rotary_press(om_rotary_press);
     boz_set_event_cookie(context);
-    menu = context;
+    options_state->menu = context;
 
     if (context->one_shot) {
-        control_depth = 1;
+        options_state->control_depth = 1;
     }
 
     om_redraw_display(context);
@@ -139,12 +155,12 @@ option_menu_init(void *cookie) {
 void
 om_play(void *cookie) {
     struct option_menu_context *context = (struct option_menu_context *) cookie;
-    if (control_depth == 0 || menu->one_shot) {
+    if (options_state->control_depth == 0 || options_state->menu->one_shot) {
         /* Save and exit */
         boz_app_exit(0);
     }
     else {
-        control_depth = 0;
+        options_state->control_depth = 0;
         om_redraw_display(context);
     }
 }
@@ -152,12 +168,12 @@ om_play(void *cookie) {
 void
 om_reset(void *cookie) {
     struct option_menu_context *context = (struct option_menu_context *) cookie;
-    if (control_depth == 0 || menu->one_shot) {
+    if (options_state->control_depth == 0 || options_state->menu->one_shot) {
         /* Discard and exit */
         boz_app_exit(1);
     }
     else {
-        control_depth = 0;
+        options_state->control_depth = 0;
         om_redraw_display(context);
     }
 }
@@ -166,13 +182,14 @@ void
 om_yellow(void *cookie) {
     struct option_menu_context *context = (struct option_menu_context *) cookie;
     int changed = 0;
-    if (control_depth == 0 || menu->one_shot) {
+
+    if (options_state->control_depth == 0 || options_state->menu->one_shot) {
         /* Discard and exit */
         boz_app_exit(1);
         return;
     }
     else {
-        control_depth--;
+        options_state->control_depth--;
         changed = 1;
     }
     if (changed)
@@ -182,33 +199,27 @@ om_yellow(void *cookie) {
 void
 om_rotary_turn(void *cookie, int clockwise) {
     struct option_menu_context *context = (struct option_menu_context *) cookie;
+    int direction = (clockwise ? 1 : -1);
 
-    if (control_depth == 0) {
-        int changed = 0;
-        if (clockwise) {
-            /* We allow page_number to equal context->num_options - this means
-               we display a "Play to save, Reset to discard" banner */
-            if (page_number < context->num_options) {
-                om_load_page(context, page_number + 1);
-                changed = 1;
-            }
-        }
-        else {
-            if (page_number > 0) {
-                om_load_page(context, page_number - 1);
-                changed = 1;
-            }
-        }
-        if (changed)
+    if (options_state->control_depth == 0) {
+        int next_page;
+
+        /* Find next enabled page in the direction we've been given. */
+        for (next_page = options_state->page_number + direction;
+                next_page >= 0 && next_page <= context->num_options &&
+                    (context->page_disable_mask & (1 << next_page));
+                    next_page += direction);
+
+        /* We allow page_number to equal context->num_options - this means
+           we display a "Play to save, Reset to discard" banner. Otherwise,
+           if the next page we've chosen is not a valid page, do nothing. */
+        if (next_page >= 0 && next_page <= context->num_options) {
+            om_load_page(context, next_page);
             om_redraw_display(context);
+        }
     }
     else {
-        if (clockwise) {
-            om_adjust_control(context, 1);
-        }
-        else {
-            om_adjust_control(context, -1);
-        }
+        om_adjust_control(context, direction);
     }
 }
 
@@ -220,27 +231,27 @@ om_rotary_press(void *cookie) {
 
 void
 om_next_control(struct option_menu_context *context) {
-    if (control_depth >= om_num_controls_on_page(context)) {
+    if (options_state->control_depth >= om_num_controls_on_page(context)) {
         /* If there are no more controls on this page, then if we're a one-shot
            menu, exit successfully. Otherwise, select nothing. */
-        if (menu->one_shot) {
+        if (options_state->menu->one_shot) {
             boz_app_exit(0);
             return;
         }
         else {
-            control_depth = 0;
+            options_state->control_depth = 0;
         }
     }
     else {
         /* Special case: a rotary press on a yes/no page shouldn't select
            the control, it should adjust it. */
-        if (current_page.type == OPTION_TYPE_YES_NO) {
-            control_depth = 1;
+        if (options_state->current_page.type == OPTION_TYPE_YES_NO) {
+            options_state->control_depth = 1;
             om_adjust_control(context, 1);
-            control_depth = 0;
+            options_state->control_depth = 0;
         }
         else {
-            control_depth++;
+            options_state->control_depth++;
         }
     }
     om_redraw_display(context);
@@ -250,13 +261,13 @@ int
 om_num_controls_on_page(struct option_menu_context *context) {
     int num_controls = 0;
 
-    if (page_number < 0 || page_number >= context->num_options)
+    if (options_state->page_number < 0 || options_state->page_number >= context->num_options)
         return 0;
 
-    switch (current_page.type & OPTION_MAIN_TYPE_MASK) {
+    switch (options_state->current_page.type & OPTION_MAIN_TYPE_MASK) {
         case OPTION_TYPE_CLOCK:
             for (int mask = 1; mask <= 4; mask <<= 1)
-                if (current_page.type & mask)
+                if (options_state->current_page.type & mask)
                     num_controls++;
             break;
 
@@ -270,59 +281,60 @@ om_num_controls_on_page(struct option_menu_context *context) {
 void
 om_load_page(struct option_menu_context *context, int new_page_number) {
     if (new_page_number >= 0 && new_page_number < context->num_options) {
-        memcpy_P(&current_page, &context->options[new_page_number], sizeof(current_page));
+        memcpy_P(&options_state->current_page, &context->options[new_page_number], sizeof(options_state->current_page));
     }
-    page_number = new_page_number;
+    options_state->page_number = new_page_number;
 }
 
 void
 om_adjust_control(struct option_menu_context *context, int direction) {
     long hr = 0, mi = 0, sec = 0;
     long old_value, new_value;
+    struct option_page *current_page = &options_state->current_page;
 
-    if (page_number >= context->num_options)
+    if (options_state->page_number >= context->num_options)
         return;
 
-    old_value = context->results[page_number];
+    old_value = context->results[options_state->page_number];
 
-    switch (current_page.type & OPTION_MAIN_TYPE_MASK) {
+    switch (current_page->type & OPTION_MAIN_TYPE_MASK) {
         case OPTION_TYPE_CLOCK:
-            if (current_page.type & OPTION_TYPE_CLOCK_HR) {
+            if (current_page->type & OPTION_TYPE_CLOCK_HR) {
                 hr = old_value / 3600;
             }
-            if (current_page.type & OPTION_TYPE_CLOCK_MIN) {
+            if (current_page->type & OPTION_TYPE_CLOCK_MIN) {
                 mi = old_value / 60;
-                if (current_page.type & OPTION_TYPE_CLOCK_HR)
+                if (current_page->type & OPTION_TYPE_CLOCK_HR)
                     mi %= 60;
             }
-            if (current_page.type & OPTION_TYPE_CLOCK_SEC) {
+            if (current_page->type & OPTION_TYPE_CLOCK_SEC) {
                 sec = old_value;
-                if (current_page.type & (OPTION_TYPE_CLOCK_HR | OPTION_TYPE_CLOCK_MIN))
+                if (current_page->type & (OPTION_TYPE_CLOCK_HR | OPTION_TYPE_CLOCK_MIN))
                     sec %= 60;
             }
 
-            if (control_depth == 1) {
+            if (options_state->control_depth == 1) {
                 /* Adjust most significant field. This doesn't wrap, it just
                    stops if you try to go too far. */
-                if (current_page.type & OPTION_TYPE_CLOCK_HR) {
+                if (current_page->type & OPTION_TYPE_CLOCK_HR) {
                     hr += direction;
                 }
-                else if (current_page.type & OPTION_TYPE_CLOCK_MIN) {
+                else if (current_page->type & OPTION_TYPE_CLOCK_MIN) {
                     mi += direction;
                 }
-                else if (current_page.type & OPTION_TYPE_CLOCK_SEC) {
+                else if (current_page->type & OPTION_TYPE_CLOCK_SEC) {
                     sec += direction;
                 }
 
             }
-            else if (control_depth == 2 && (current_page.type == OPTION_TYPE_CLOCK_HR_MIN || current_page.type == OPTION_TYPE_CLOCK_HR_MIN_SEC)) {
+            else if (options_state->control_depth == 2 && (current_page->type == OPTION_TYPE_CLOCK_HR_MIN || current_page->type == OPTION_TYPE_CLOCK_HR_MIN_SEC)) {
                 mi += direction;
                 if (mi < 0)
                     mi = 59;
                 else if (mi > 59)
                     mi = 0;
             }
-            else if ((control_depth == 2 && current_page.type == OPTION_TYPE_CLOCK_MIN_SEC) || (control_depth == 3 && current_page.type == OPTION_TYPE_CLOCK_HR_MIN_SEC)) {
+            else if ((options_state->control_depth == 2 && current_page->type == OPTION_TYPE_CLOCK_MIN_SEC) || (options_state->control_depth == 3 && current_page->type == OPTION_TYPE_CLOCK_HR_MIN_SEC)) {
                 sec += direction;
                 if (sec < 0)
                     sec = 59;
@@ -331,56 +343,56 @@ om_adjust_control(struct option_menu_context *context, int direction) {
             }
 
             new_value = hr * 3600L + mi * 60L + sec;
-            if (new_value < 0 || new_value < current_page.min_value ||
-                    new_value > current_page.max_value) {
+            if (new_value < 0 || new_value < current_page->min_value ||
+                    new_value > current_page->max_value) {
                 /* Leave the value alone */
             }
             else {
-                context->results[page_number] = new_value;
+                context->results[options_state->page_number] = new_value;
                 om_redraw_option_value(context);
             }
             break;
 
         case OPTION_TYPE_NUMBER:
-            if (old_value < current_page.min_value && direction < 0) {
+            if (old_value < current_page->min_value && direction < 0) {
                 /* Current value is NULL, next step is max value */
-                new_value = current_page.max_value;
+                new_value = current_page->max_value;
             }
             else {
-                new_value = old_value + direction * current_page.step_size;
-                if (new_value > current_page.max_value) {
-                    if (current_page.null_value) {
+                new_value = old_value + direction * current_page->step_size;
+                if (new_value > current_page->max_value) {
+                    if (current_page->null_value) {
                         /* Position ourselves one step below the min value,
                            which is the NULL value for this option */
-                        new_value = current_page.min_value - current_page.step_size;
+                        new_value = current_page->min_value - current_page->step_size;
                     }
                     else {
                         /* Wrap round to the min value */
-                        new_value = current_page.min_value;
+                        new_value = current_page->min_value;
                     }
                 }
-                else if (new_value < current_page.min_value && current_page.null_value == NULL) {
+                else if (new_value < current_page->min_value && current_page->null_value == NULL) {
                     /* Wrap around to the max value unless there's a null value */
-                    new_value = current_page.max_value;
+                    new_value = current_page->max_value;
                 }
             }
-            context->results[page_number] = new_value;
+            context->results[options_state->page_number] = new_value;
             om_redraw_option_value(context);
             break;
 
         case OPTION_TYPE_YES_NO:
             new_value = !old_value;
-            context->results[page_number] = new_value;
+            context->results[options_state->page_number] = new_value;
             om_redraw_option_value(context);
             break;
 
         case OPTION_TYPE_LIST:
             new_value = old_value + direction;
             if (new_value < 0)
-                new_value = current_page.num_choices - 1;
-            else if (new_value >= current_page.num_choices)
+                new_value = current_page->num_choices - 1;
+            else if (new_value >= current_page->num_choices)
                 new_value = 0;
-            context->results[page_number] = new_value;
+            context->results[options_state->page_number] = new_value;
             om_redraw_option_value(context);
             break;
     }
@@ -390,13 +402,13 @@ void
 om_redraw_display(struct option_menu_context *context) {
     boz_display_clear();
 
-    if (page_number >= context->num_options) {
+    if (options_state->page_number >= context->num_options) {
         boz_display_write_string_P(s_accept);
         boz_display_set_cursor(1, 0);
         boz_display_write_string_P(s_discard);
     }
     else {
-        boz_display_write_string_P(current_page.name);
+        boz_display_write_string_P(options_state->current_page.name);
         om_redraw_option_value(context);
     }
 }
@@ -420,7 +432,7 @@ execute_disp_inst(struct disp_print_inst *inst, long value) {
         if (inst->value_mod)
             n = n % inst->value_mod;
 
-        if (inst->control_depth == control_depth) {
+        if (inst->control_depth == options_state->control_depth) {
             /* Draw arrows pointing to this field */
             flags[i++] = 'A';
         }
@@ -455,14 +467,15 @@ om_redraw_option_value(struct option_menu_context *context) {
     char str[17];
     const char *str_p;
     byte col = 0;
-    long value = context->results[page_number];
+    long value = context->results[options_state->page_number];
     struct clock_print_inst clock_insts;
     struct disp_print_inst inst;
+    struct option_page *current_page = &options_state->current_page;
     boz_display_set_cursor(1, 0);
 
-    switch (current_page.type & OPTION_MAIN_TYPE_MASK) {
+    switch (current_page->type & OPTION_MAIN_TYPE_MASK) {
         case OPTION_TYPE_CLOCK:
-            memcpy_P(&clock_insts, clock_print_insts + (current_page.type & OPTION_SUB_TYPE_MASK), sizeof(clock_insts));
+            memcpy_P(&clock_insts, clock_print_insts + (current_page->type & OPTION_SUB_TYPE_MASK), sizeof(clock_insts));
             for (int inst_index = 0; inst_index < clock_insts.num_insts; ++inst_index) {
                 memcpy_P(&inst, clock_insts.insts + inst_index, sizeof(inst));
                 col += execute_disp_inst(&inst, value);
@@ -470,8 +483,8 @@ om_redraw_option_value(struct option_menu_context *context) {
             break;
 
         case OPTION_TYPE_NUMBER:
-            if (value < current_page.min_value) {
-                strncpy_P(str, current_page.null_value, sizeof(str));
+            if (value < current_page->min_value) {
+                strncpy_P(str, current_page->null_value, sizeof(str));
                 str[16] = '\0';
                 om_display_write_centre(str, 16);
                 col = 16;
@@ -491,12 +504,12 @@ om_redraw_option_value(struct option_menu_context *context) {
             break;
 
         case OPTION_TYPE_LIST:
-            str_p = (const char *) pgm_read_ptr_near(&current_page.choices[value]);
+            str_p = (const char *) pgm_read_ptr_near(&current_page->choices[value]);
             strncpy_P(str, str_p, sizeof(str));
             str[15] = '\0';
             boz_display_set_cursor(1, 1);
             om_display_write_centre(str, 15);
-            if (control_depth > 0) {
+            if (options_state->control_depth > 0) {
                 /* Put brackets round it if it is selected, that is, if
                    turning the knob will change the value */
                 boz_display_set_cursor(1, 0);

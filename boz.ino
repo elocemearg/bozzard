@@ -17,6 +17,7 @@
 #define DISP_CMD_QUEUE_SIZE 96
 #define APP_CONTEXT_STACK_SIZE 4
 #define NUM_CLOCKS BOZ_NUM_CLOCKS // must be less than the number of bits in an int
+#define BOZ_DYN_ARENA_SIZE 512
 
 #define BOZ_NUM_CHAR_PATTERNS 7
 const PROGMEM byte boz_char_patterns[][8] = {
@@ -126,8 +127,10 @@ struct snd_cmd_state snd_cmd_state;
 struct disp_cmd_state disp_cmd_state;
 
 /* General-purpose clocks for use by applications. There are NUM_CLOCKS clocks,
-   to be shared between all applications currently in memory. */
-struct boz_clock clocks[NUM_CLOCKS];
+   to be shared between all applications currently in memory. "clocks" is an
+   array of boz_clocks whose memory has been dynamically allocated by
+   boz_mm_main_alloc. boz_clock is a pointer type. */
+boz_clock clocks[NUM_CLOCKS];
 unsigned int master_clocks_enabled = 0; // bitmask
 
 const byte BUTTON_PRESS_THRESHOLD_MS = 0;
@@ -158,10 +161,14 @@ int re_data_value_last_clock = HIGH;
 unsigned long re_last_turn_high_ms = 0;
 unsigned long re_last_turn_low_ms = 0;
 
-struct app_context app_context_stack[APP_CONTEXT_STACK_SIZE];
+// pointer to dynamic memory allocated by boz_mm_main_alloc
+struct app_context *app_context_stack;
 
-/* current app context */
+/* pointer to current app context */
 struct app_context *app_context = NULL;
+
+/* dynamic memory pool for boz_mm */
+char boz_dyn_arena[BOZ_DYN_ARENA_SIZE];
 
 /* If an app calls another app, the app's init function, flags etc go in
    app_to_call_data, and app_call_defer points to it. We set app_call_defer
@@ -191,9 +198,11 @@ static void memzero(void *p, size_t n) {
     }
 }
 
-struct boz_clock *
+boz_clock 
 boz_clock_create(long initial_value_ms, int direction_forwards) {
     int which_clock;
+    boz_clock clock;
+
     for (which_clock = 0; which_clock < NUM_CLOCKS; ++which_clock) {
         if ((master_clocks_enabled & (1 << which_clock)) == 0) {
             break;
@@ -204,16 +213,23 @@ boz_clock_create(long initial_value_ms, int direction_forwards) {
         return NULL;
     }
 
+    clock = (boz_clock) boz_mm_main_alloc(sizeof(*clock));
+    if (clock == NULL) {
+        /* Not enough memory */
+        return NULL;
+    }
+    clocks[which_clock] = clock;
+
     master_clocks_enabled |= (1 << which_clock);
     if (app_context)
         app_context->clocks_enabled |= (1 << which_clock);
-    boz_clock_init(&clocks[which_clock], initial_value_ms, direction_forwards);
-    return &clocks[which_clock];
+    boz_clock_init(clock, which_clock, initial_value_ms, direction_forwards);
+    return clock;
 }
 
 void
-boz_clock_release(struct boz_clock *clock) {
-    unsigned int which_clock = clock - clocks;
+boz_clock_release(boz_clock clock) {
+    unsigned int which_clock = clock->id;
     
     boz_clock_stop(clock);
     boz_clock_cancel_alarm(clock);
@@ -222,6 +238,8 @@ boz_clock_release(struct boz_clock *clock) {
     if (app_context)
         app_context->clocks_enabled &= ~(1 << which_clock);
     master_clocks_enabled &= ~(1 << which_clock);
+    boz_mm_main_free(clock);
+    clocks[which_clock] = NULL;
 }
 
 int
@@ -380,7 +398,7 @@ boz_cancel_alarm() {
 
 int
 boz_app_call(int app_id, void *param, void (*return_callback)(void *, int), void *return_callback_cookie) {
-    if (app_context - app_context_stack >= APP_CONTEXT_STACK_SIZE - 1) {
+    if (app_context != NULL && app_context - app_context_stack >= APP_CONTEXT_STACK_SIZE - 1) {
         // already at the maximum app nesting level
         return -1;
     }
@@ -400,6 +418,18 @@ void
 boz_app_exit(int exit_status) {
     app_exited = 1;
     app_exit_status = exit_status;
+}
+
+void
+boz_crash(int pattern) {
+    app_context = NULL;
+    boz_app_call(BOZ_APP_ID_CRASH, &pattern, NULL, NULL);
+
+    /* return to the main loop immediately, and stay there, don't return to
+       the application that called us */
+    while (1) {
+        loop();
+    }
 }
 
 int
@@ -430,7 +460,7 @@ void
 app_context_tear_down(struct app_context *ac) {
     for (int i = 0; i < NUM_CLOCKS; ++i) {
         if (ac->clocks_enabled & (1 << i)) {
-            boz_clock_release(&clocks[i]);
+            boz_clock_release(clocks[i]);
         }
     }
     boz_sound_stop_all();
@@ -719,6 +749,8 @@ void setup() {
     boz_leds_set(0);
 #endif
 
+    boz_mm_init(boz_dyn_arena, sizeof(boz_dyn_arena));
+
 #ifdef BOZ_ORIGINAL
     /* Initialise shift register - this will also set the appropriate pin
        modes on the pins we use to control the shift register */
@@ -756,6 +788,12 @@ void setup() {
     }
     else {
         app_call_defer = &app_to_call_data;
+    }
+
+    /* Allocate memory for any tables/arrays we need */
+    app_context_stack = (struct app_context *) boz_mm_main_alloc(sizeof(struct app_context) * APP_CONTEXT_STACK_SIZE);
+    for (int i = 0; i < NUM_CLOCKS; ++i) {
+        clocks[i] = NULL;
     }
 }
 
@@ -836,7 +874,7 @@ void loop() {
     if (app_context && app_context->clocks_enabled) {
         for (byte clock_index = 0; clock_index < NUM_CLOCKS; ++clock_index) {
             if (app_context->clocks_enabled & (1 << clock_index)) {
-                struct boz_clock *clock = &clocks[clock_index];
+                boz_clock clock = clocks[clock_index];
                 long value = boz_clock_value(clock);
 
                 if (clock->alarm_enabled) {
@@ -851,7 +889,7 @@ void loop() {
                 if (boz_clock_running(clock)) {
                     if (clock->min_enabled) {
                         if (value <= clock->min_ms) {
-                            void (*handler)(void *, struct boz_clock *) = clock->event_expiry_min;
+                            void (*handler)(void *, boz_clock) = clock->event_expiry_min;
                             boz_clock_stop(clock);
                             //boz_clock_cancel_expiry_min(clock);
                             if (handler) {
@@ -863,7 +901,7 @@ void loop() {
 
                     if (clock->max_enabled) {
                         if (value >= clock->max_ms) {
-                            void (*handler)(void *, struct boz_clock *) = clock->event_expiry_max;
+                            void (*handler)(void *, boz_clock) = clock->event_expiry_max;
                             //boz_clock_cancel_expiry_max(clock);
                             boz_clock_stop(clock);
                             if (handler) {
@@ -950,19 +988,6 @@ void loop() {
                         }
                         button->event_delivered = 1;
                     }
-#ifndef BOZ_ORIGINAL
-                    else if (button->button_function == FUNC_RE_KEY &&
-                            boz_is_button_pressed(FUNC_YELLOW, 0, NULL)) {
-                        /* Special case if the rotary encoder key is pressed
-                           while the yellow button is held down: this means
-                           toggle the lcd backlight. */
-                        boz_lcd_set_backlight_state(!boz_lcd_get_backlight_state());
-
-                        /* Don't actually deliver this to the application,
-                           just pretend we did. */
-                        button->event_delivered = 1;
-                    }
-#endif
                     else {
                         deliver_button_event(button);
                     }
@@ -994,6 +1019,9 @@ void loop() {
     while (app_exited) {
         /* It has. First release any resources this app still has */
         app_context_tear_down(app_context);
+
+        /* Free any dynamic storage this app has allocated */
+        boz_mm_pop_context();
 
         /* You can't call another app in the same call as exiting */
         app_call_defer = NULL;
@@ -1034,6 +1062,10 @@ void loop() {
         }
 
         app_context_init(app_context);
+
+        /* Create a new allocated-chunks list in the memory manager for this
+           new app context */
+        boz_mm_push_context();
 
         if (app_call_defer->flags & BOZ_APP_NO_SLEEP) {
             app_context->forbid_sleep = 1;
@@ -1093,7 +1125,7 @@ void loop() {
         if (app_context && app_context->clocks_enabled) {
             /* Check each enabled, running clock */
             for (int clock_index = 0; clock_index < NUM_CLOCKS; ++clock_index) {
-                struct boz_clock *clock = &clocks[clock_index];
+                boz_clock clock = clocks[clock_index];
                 if ((app_context->clocks_enabled & (1 << clock_index)) && boz_clock_running(clock)) {
 
                     /* If the clock is heading for an alarm, a minimum or a

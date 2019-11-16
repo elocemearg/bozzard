@@ -1,6 +1,6 @@
 #include "boz.h"
 
-static struct boz_clock *clock;
+static boz_clock clock;
 
 const long clock_initial_ms = 0;
 const long clock_expiry_ms = 30000L;
@@ -32,7 +32,7 @@ test_update_display_clock(long value, int full) {
 }
 
 void
-test_clock_alarm(void *cookie, struct boz_clock *clock) {
+test_clock_alarm(void *cookie, boz_clock clock) {
     long value = boz_clock_value(clock);
 
     test_update_display_clock(value, 0);
@@ -110,7 +110,7 @@ void test_init(void *cookie) {
     boz_clock_run(clock);
 }
 
-void test_clock_expired(void *cookie, struct boz_clock *clock) {
+void test_clock_expired(void *cookie, boz_clock clock) {
     boz_clock_stop(clock);
     test_update_display_clock(boz_clock_value(clock), 1);
 

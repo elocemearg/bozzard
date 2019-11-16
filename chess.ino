@@ -107,14 +107,14 @@ const PROGMEM struct option_page preset_menu[] = {
         RULES_LIST_LENGTH
     }
 };
-long preset_picked = 0;
+//long preset_picked = 0;
 
-struct option_menu_context preset_menu_context = {
+/*struct option_menu_context preset_menu_context = {
     preset_menu,
     1,
     &preset_picked,
     1
-};
+};*/
 
 const PROGMEM char s_inc_none[] = "None";
 const PROGMEM char s_inc_standard[] = "Increment";
@@ -185,18 +185,19 @@ const PROGMEM struct option_page clock_settings_menu[] = {
     }
 };
 
-long clock_settings_results[4];
+//long clock_settings_results[4];
 #define CLOCK_SETTINGS_INITIAL_TIME 0
 #define CLOCK_SETTINGS_INCREMENT_MODE 1
 #define CLOCK_SETTINGS_INCREMENT_TIME 2
 #define CLOCK_SETTINGS_ALLOW_NEGATIVE 3
+#define CLOCK_SETTINGS_LENGTH 4
 
-struct option_menu_context clock_settings_menu_context = {
+/*struct option_menu_context clock_settings_menu_context = {
     clock_settings_menu,
     sizeof(clock_settings_menu) / sizeof(clock_settings_menu[0]),
     clock_settings_results,
     0
-};
+};*/
 
 
 struct chess_clock_format {
@@ -296,10 +297,10 @@ const PROGMEM byte turn_char_pattern[] = {
 
 
 struct chess_state {
-    struct boz_clock *clocks[2];
+    boz_clock clocks[2];
     int num_moves[2];
     byte delay_expired[2];
-    struct boz_clock *delay_clock;
+    boz_clock delay_clock;
 
     /* flags[x] if player x's flag has fallen */
     byte flags[2];
@@ -313,19 +314,35 @@ struct chess_state {
     char clocks_have_started;
 
     struct chess_clock_rules rules;
+
+    struct option_menu_context *clock_settings_menu_context;
+    struct option_menu_context *preset_menu_context;
 };
 
-struct chess_state chess_state;
+struct chess_state *chess_state;
 
 void
 chess_init_callback(void *cookie, int rc) {
+    int preset_picked;
+    struct option_menu_context *omc = chess_state->preset_menu_context;
+
     if (rc != 0) {
         boz_app_exit(1);
         return;
     }
 
+    if (omc == NULL) {
+        preset_picked = 0;
+    }
+    else {
+        preset_picked = (int) omc->results[0];
+        boz_mm_free(omc->results);
+        boz_mm_free(omc);
+        chess_state->preset_menu_context = NULL;
+    }
+
     /* Load the selected time control, whose index is now in preset_picked */
-    memcpy_P(&chess_state.rules, &rules_list[preset_picked], sizeof(chess_state.rules));
+    memcpy_P(&chess_state->rules, &rules_list[preset_picked], sizeof(chess_state->rules));
 
     /* Program display CGRAM with our whose-turn-it-is and flag characters */
     boz_display_set_cgram_address(TURN_CHAR << 3);
@@ -337,23 +354,38 @@ chess_init_callback(void *cookie, int rc) {
         boz_display_write_char(pgm_read_byte_near(flag_char_pattern + i));
     }
 
-    chess_game_reset(&chess_state);
+    chess_game_reset(chess_state);
 
-    boz_set_event_cookie(&chess_state);
+    boz_set_event_cookie(chess_state);
     boz_set_event_handler_qm_play(chess_play);
     boz_set_event_handler_qm_reset(chess_reset);
     boz_set_event_handler_buzz(chess_buzzer);
     boz_set_event_handler_qm_rotary_press(chess_rotary_press);
 }
 
+static void start_preset_menu() {
+    struct option_menu_context *omc = (struct option_menu_context *) boz_mm_alloc(sizeof(struct option_menu_context));
+    chess_state->preset_menu_context = omc;
+    omc->options = preset_menu;
+    omc->num_options = 1;
+    omc->results = (long *) boz_mm_alloc(sizeof(long));
+    omc->results[0] = 0;
+    omc->one_shot = 1;
+    omc->page_disable_mask = 0;
+    boz_app_call(BOZ_APP_ID_OPTION_MENU, omc, chess_init_callback, NULL);
+}
+
 void
 chess_init(void *dummy) {
     /* Before we do anything, call out to the options app, and get the user
        to pick a preset time control. */
-    chess_state.clocks[0] = NULL;
-    chess_state.clocks[1] = NULL;
-    chess_state.delay_clock = NULL;
-    boz_app_call(BOZ_APP_ID_OPTION_MENU, &preset_menu_context, chess_init_callback, NULL);
+    chess_state = (struct chess_state *) boz_mm_alloc(sizeof(*chess_state));
+    memset(chess_state, 0, sizeof(*chess_state));
+    chess_state->clocks[0] = NULL;
+    chess_state->clocks[1] = NULL;
+    chess_state->delay_clock = NULL;
+
+    start_preset_menu();
 }
 
 static void print_clock_value(long value_ms, const struct chess_clock_format *format_array) {
@@ -424,7 +456,7 @@ static void redraw_clock(struct chess_state *state, int which_clock) {
     attach_clock_update_alarm(state->clocks[which_clock], which_clock);
 }
 
-static void redraw_delay_clock(void *cookie, struct boz_clock *clock) {
+static void redraw_delay_clock(void *cookie, boz_clock clock) {
     struct chess_state *state = (struct chess_state *) cookie;
     long value_ms = boz_clock_value(clock);
     char turn = state->whose_turn;
@@ -437,7 +469,7 @@ static void redraw_delay_clock(void *cookie, struct boz_clock *clock) {
     attach_delay_update_alarm(clock);
 }
 
-static void clock_update_alarm(void *cookie, struct boz_clock *clock) {
+static void clock_update_alarm(void *cookie, boz_clock clock) {
     struct chess_state *state = (struct chess_state *) cookie;
     int which_player;
 
@@ -454,7 +486,7 @@ static void clock_update_alarm(void *cookie, struct boz_clock *clock) {
     }
 }
 
-static void attach_clock_update_alarm(struct boz_clock *clock, int which_player) {
+static void attach_clock_update_alarm(boz_clock clock, int which_player) {
     static const int step_ms = 200;
     long value_ms = boz_clock_value(clock);
     long alarm_ms;
@@ -489,7 +521,7 @@ static void attach_clock_update_alarm(struct boz_clock *clock, int which_player)
     boz_clock_set_alarm(clock, alarm_ms, clock_update_alarm);
 }
 
-static void attach_delay_update_alarm(struct boz_clock *clock) {
+static void attach_delay_update_alarm(boz_clock clock) {
     static const int step_ms = 200;
     long value_ms = boz_clock_value(clock);
     long alarm_ms;
@@ -525,7 +557,7 @@ static void flag_fall(struct chess_state *state, int which_player) {
     boz_display_write_char(FLAG_CHAR);
 }
 
-static void chess_clock_expired(void *cookie, struct boz_clock *clock) {
+static void chess_clock_expired(void *cookie, boz_clock clock) {
     struct chess_state *state = (struct chess_state *) cookie;
     for (int p = 0; p < 2; ++p) {
         if (clock == state->clocks[p] && !state->flags[p]) {
@@ -636,7 +668,7 @@ chess_game_reset(struct chess_state *state) {
     chess_redraw(state);
 }
 
-static void chess_delay_expired(void *cookie, struct boz_clock *clock) {
+static void chess_delay_expired(void *cookie, boz_clock clock) {
     struct chess_state *state = (struct chess_state *) cookie;
     int player = state->whose_turn;
     if (player >= 0) {
@@ -731,7 +763,7 @@ chess_reset(void *cookie) {
     struct chess_state *state = (struct chess_state *) cookie;
     if (!state->clocks_have_started) {
         /* Go back into the preset menu, and then to chess_init_callback */
-        boz_app_call(BOZ_APP_ID_OPTION_MENU, &preset_menu_context, chess_init_callback, NULL);
+        start_preset_menu();
     }
     else {
         /* Reset the clock to its initial state */
@@ -760,25 +792,47 @@ chess_rotary_press(void *cookie) {
     if (state->whose_turn < 0 && !state->clocks_have_started) {
         /* Clocks are stopped and nothing has started yet - open clock settings
            menu */
+        long *clock_settings_results;
+        struct option_menu_context *omc = (struct option_menu_context *) boz_mm_alloc(sizeof(struct option_menu_context));
+
+        state->clock_settings_menu_context = omc;
+        omc->options = clock_settings_menu;
+        omc->num_options = CLOCK_SETTINGS_LENGTH;
+        omc->results = (long *) boz_mm_alloc(sizeof(long) * CLOCK_SETTINGS_LENGTH);
+        omc->one_shot = 0;
+        omc->page_disable_mask = 0;
+        clock_settings_results = omc->results;
+
         clock_settings_results[CLOCK_SETTINGS_INITIAL_TIME] = state->rules.initial_time_ms / 1000;
         clock_settings_results[CLOCK_SETTINGS_INCREMENT_MODE] = state->rules.increment_mode;
         clock_settings_results[CLOCK_SETTINGS_INCREMENT_TIME] = state->rules.increment_ms / 1000;
         clock_settings_results[CLOCK_SETTINGS_ALLOW_NEGATIVE] = state->rules.allow_negative;
-        boz_app_call(BOZ_APP_ID_OPTION_MENU, &clock_settings_menu_context, chess_settings_callback, state);
+        boz_app_call(BOZ_APP_ID_OPTION_MENU, omc, chess_settings_callback, state);
     }
 }
 
 void
 chess_settings_callback(void *cookie, int rc) {
     struct chess_state *state = (struct chess_state *) cookie;
-    if (rc == 0) {
+    struct option_menu_context *omc = state->clock_settings_menu_context;
+
+    if (rc == 0 && state->clock_settings_menu_context != NULL) {
+        long *clock_settings_results = omc->results;
+
         state->rules.initial_time_ms = clock_settings_results[CLOCK_SETTINGS_INITIAL_TIME] * 1000L;
         state->rules.increment_mode = clock_settings_results[CLOCK_SETTINGS_INCREMENT_MODE];
         state->rules.increment_ms = clock_settings_results[CLOCK_SETTINGS_INCREMENT_TIME] * 1000;
         state->rules.allow_negative = (char) clock_settings_results[CLOCK_SETTINGS_ALLOW_NEGATIVE];
+
         chess_game_reset(state);
     }
     else {
         chess_redraw(state);
+    }
+
+    if (omc != NULL) {
+        boz_mm_free(omc->results);
+        boz_mm_free(omc);
+        state->clock_settings_menu_context = NULL;
     }
 }

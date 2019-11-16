@@ -17,7 +17,10 @@
  * NULL.
  */
 
-struct boz_clock {
+struct boz_clock_s {
+    /* id of this clock, for the main loop */
+    int id;
+
     /* The initial value on the clock when initialised or reset */
     long initial_value_ms;
 
@@ -44,9 +47,9 @@ struct boz_clock {
     long alarm_ms;
 
     void *event_cookie;
-    void (*event_expiry_min)(void *cookie, struct boz_clock *clock);
-    void (*event_expiry_max)(void *cookie, struct boz_clock *clock);
-    void (*event_alarm)(void *cookie, struct boz_clock *clock);
+    void (*event_expiry_min)(void *cookie, struct boz_clock_s *clock);
+    void (*event_expiry_max)(void *cookie, struct boz_clock_s *clock);
+    void (*event_alarm)(void *cookie, struct boz_clock_s *clock);
 
     /* Whether the clock is running. */
     unsigned int running : 1;
@@ -62,43 +65,45 @@ struct boz_clock {
     unsigned int max_enabled : 1;
 };
 
+typedef struct boz_clock_s *boz_clock;
+
 /* Set the clock running in its chosen direction. This has no effect if the
  * clock is already running. */
 void
-boz_clock_run(struct boz_clock *clock);
+boz_clock_run(boz_clock clock);
 
 /* Return 1 if the clock is currently running, and 0 otherwise. */
 int
-boz_clock_running(struct boz_clock *clock);
+boz_clock_running(boz_clock clock);
 
 /* Stop the clock on its current value. This has no effect if the clock is
  * already stopped. */
 void
-boz_clock_stop(struct boz_clock *clock);
+boz_clock_stop(boz_clock clock);
 
 /* Set the clock's value to its initial value. This will not stop the clock.
  * If you want it to stop on its initial value, call boz_clock_stop() then
  * boz_clock_reset(). */
 void
-boz_clock_reset(struct boz_clock *clock);
+boz_clock_reset(boz_clock clock);
 
 /* Set the clock's direction. It is permitted to change the clock's direction
  * while it is running, but note that if an alarm is set on this clock,
  * changing the clock's direction may make it look like that alarm time has
  * now "passed", resulting in the alarm's event handler being called. */
 void
-boz_clock_set_direction(struct boz_clock *clock, int direction_forwards);
+boz_clock_set_direction(boz_clock clock, int direction_forwards);
 
 /* Return the current value on the clock, in milliseconds. */
 long
-boz_clock_value(struct boz_clock *clock);
+boz_clock_value(boz_clock clock);
 
 /* Set an arbitrary pointer which will be passed to the event callbacks as the
  * parameter "cookie". This is specific to this clock, and is independent of
  * the event cookie for general button-pressing events as set by
  * boz_set_event_cookie(). */
 void
-boz_clock_set_event_cookie(struct boz_clock *clock, void *cookie);
+boz_clock_set_event_cookie(boz_clock clock, void *cookie);
 
 /* boz_clock_set_alarm
  * Set the clock to call the callback function when the clock's value has
@@ -115,14 +120,14 @@ boz_clock_set_event_cookie(struct boz_clock *clock, void *cookie);
  * alarm value.
  */
 void
-boz_clock_set_alarm(struct boz_clock *clock, long alarm_value_ms,
-        void (*callback)(void *, struct boz_clock *));
+boz_clock_set_alarm(boz_clock clock, long alarm_value_ms,
+        void (*callback)(void *, boz_clock));
 
 /* boz_clock_cancel_alarm
  * Cancel any alarm previously set with boz_clock_set_alarm(). This function
  * has no effect if no such alarm was set. */
 void
-boz_clock_cancel_alarm(struct boz_clock *clock);
+boz_clock_cancel_alarm(boz_clock clock);
 
 /* boz_clock_set_expiry_max
  * Set the maximum value for the clock, and optionally attach an event handler
@@ -133,8 +138,8 @@ boz_clock_cancel_alarm(struct boz_clock *clock);
  * clock.
  */
 void
-boz_clock_set_expiry_max(struct boz_clock *clock, long max_ms,
-        void (*callback)(void *, struct boz_clock *));
+boz_clock_set_expiry_max(boz_clock clock, long max_ms,
+        void (*callback)(void *, boz_clock));
 
 /* boz_clock_set_expiry_min
  * Set the minimum value for the clock, and optionally attach an event handler
@@ -145,36 +150,36 @@ boz_clock_set_expiry_max(struct boz_clock *clock, long max_ms,
  * clock.
  */
 void
-boz_clock_set_expiry_min(struct boz_clock *clock, long min_ms,
-        void (*callback)(void *, struct boz_clock *));
+boz_clock_set_expiry_min(boz_clock clock, long min_ms,
+        void (*callback)(void *, boz_clock));
 
 /* boz_clock_cancel_expiry_min
  * Cancel any minimum clock value and its associated handler. */
 void
-boz_clock_cancel_expiry_min(struct boz_clock *clock);
+boz_clock_cancel_expiry_min(boz_clock clock);
 
 /* boz_clock_cancel_expiry_max
  * Cancel any maximum clock value and its associated handler. */
 void
-boz_clock_cancel_expiry_max(struct boz_clock *clock);
+boz_clock_cancel_expiry_max(boz_clock clock);
 
 /* boz_clock_set_initial_value
  * Change the clock's initial value to value_ms milliseconds. This does not
  * set the clock's current value - it sets what initial value the clock will
  * have the next time it is reset with boz_clock_reset(). */
 void
-boz_clock_set_initial_value(struct boz_clock *clock, long value_ms);
+boz_clock_set_initial_value(boz_clock clock, long value_ms);
 
 /* boz_clock_is_direction_forwards
  * Returns 1 if the clock's direction is forwards, 0 if it's backwards.
  */
 int
-boz_clock_is_direction_forwards(struct boz_clock *clock);
+boz_clock_is_direction_forwards(boz_clock clock);
 
 unsigned long
-boz_clock_get_ms_until_alarm(struct boz_clock *clock);
+boz_clock_get_ms_until_alarm(boz_clock clock);
 
 void
-boz_clock_add(struct boz_clock *clock, long ms_to_add);
+boz_clock_add(boz_clock clock, long ms_to_add);
 
 #endif

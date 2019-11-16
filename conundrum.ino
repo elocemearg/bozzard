@@ -105,8 +105,8 @@ struct game_rules {
     char buzzer_noise;
 };
 
-/* Rules for the current game */
-struct game_rules rules;
+/* Rules for the current game (pointer to dynamically allocated memory) */
+static struct game_rules *rules;
 
 const PROGMEM struct game_rules conundrum_rules = {
     30,   // time_limit_sec
@@ -251,7 +251,7 @@ const PROGMEM struct option_page conundrum_options[] = {
     },
 };
 
-long con_options_return[7];
+//long con_options_return[7];
 #define CON_OPTIONS_INDEX_TIME_LIMIT 0
 #define CON_OPTIONS_INDEX_WARN_TIME 1
 #define CON_OPTIONS_INDEX_BUZZ_LENGTH 2
@@ -259,18 +259,19 @@ long con_options_return[7];
 #define CON_OPTIONS_INDEX_ALLOW_REBUZZ 4
 #define CON_OPTIONS_INDEX_LOCKOUT_TIME 5
 #define CON_OPTIONS_INDEX_WHICH_BUZZERS 6
+#define CON_OPTIONS_LENGTH 7
 
-struct option_menu_context con_options_context = {
+/*struct option_menu_context con_options_context = {
     conundrum_options,
     sizeof(con_options_return) / sizeof(con_options_return[0]),
     con_options_return
-};
+};*/
 
 
 #define NUM_BUZZERS 4
 
 struct conundrum_state {
-    struct boz_clock *clock;
+    boz_clock clock;
 
     /* Whether each side (or player) has buzzed yet. If two_sides is not set,
        then we use all four elements, otherwise we only use the first two. */
@@ -300,16 +301,20 @@ struct conundrum_state {
 
     unsigned long last_buzz_at_millis; // millis() when last buzz occurred
     unsigned long time_expired_at_millis; // millis() time when time ran out
+
+    /* If we call the option menu app, we allocate a struct option_menu_context
+       and point this to it. The option menu app puts the selected option
+       values in here and returns. Our return callback function frees it. */
+    struct option_menu_context *con_options_context;
 };
 
-static struct conundrum_state con_state;
-static struct conundrum_state *statep;
+// Pointer to dynamically allocated memory
+static struct conundrum_state *con_state;
 
-
-#define BUZZER_TO_SIDE(BUZZER) (!rules.two_sides ? (BUZZER) : (((BUZZER) < rules.first_c2_buzzer) ? 0 : 1))
-#define IS_LEFT_SIDE(BUZZER) ((BUZZER) < rules.first_c2_buzzer)
-#define IS_RIGHT_SIDE(BUZZER) ((BUZZER) >= rules.first_c2_buzzer)
-#define IS_SIDE_N(BUZZER, SIDE) ((BUZZER) >= 0 && ((!!(SIDE)) == ((BUZZER) >= rules.first_c2_buzzer)))
+#define BUZZER_TO_SIDE(BUZZER) (!rules->two_sides ? (BUZZER) : (((BUZZER) < rules->first_c2_buzzer) ? 0 : 1))
+#define IS_LEFT_SIDE(BUZZER) ((BUZZER) < rules->first_c2_buzzer)
+#define IS_RIGHT_SIDE(BUZZER) ((BUZZER) >= rules->first_c2_buzzer)
+#define IS_SIDE_N(BUZZER, SIDE) ((BUZZER) >= 0 && ((!!(SIDE)) == ((BUZZER) >= rules->first_c2_buzzer)))
 
 char prng_seeded = 0;
 
@@ -322,7 +327,7 @@ static void update_clock_value(long ms, int decimal_places) {
     long seconds = (ms / 1000L) % 60;
     long frac = (ms % 1000) / divisor;
     boz_display_set_cursor(0, 4);
-    if (minutes > 0 || rules.time_limit_sec == 0 || rules.time_limit_sec > 60) {
+    if (minutes > 0 || rules->time_limit_sec == 0 || rules->time_limit_sec > 60) {
         boz_display_write_long(minutes, 2, "");
         boz_display_write_char(':');
         boz_display_write_long(seconds, 2, "0");
@@ -466,7 +471,7 @@ static void redraw_display(struct conundrum_state *state) {
 
     if (state->current_buzzer >= 0) {
         // someone has buzzed - point at them
-        if (!rules.two_sides) {
+        if (!rules->two_sides) {
             update_buzz_indicator(state->current_buzzer);
         }
         else {
@@ -478,13 +483,13 @@ static void redraw_display(struct conundrum_state *state) {
             }
         }
     }
-    else if (!rules.two_sides && !rules.show_buzz_time && state->clock_has_started) {
+    else if (!rules->two_sides && !rules->show_buzz_time && state->clock_has_started) {
         update_buzz_indicator(state->last_buzzer);
     }
 
     con_set_leds(state);
  
-    if (rules.two_sides && rules.show_buzz_time) {
+    if (rules->two_sides && rules->show_buzz_time) {
         for (int p = 0; p < 2; ++p) {
             if (state->buzzed[p] && !IS_SIDE_N(state->current_buzzer, p)) {
                 update_past_buzz_time(p, state->buzz_times[p]);
@@ -529,19 +534,19 @@ con_reset(void *cookie) {
 }
 
 void
-con_alarm_handler(void *cookie, struct boz_clock *clock) {
+con_alarm_handler(void *cookie, boz_clock clock) {
     struct conundrum_state *state = (struct conundrum_state *) cookie;
     long ms = boz_clock_value(clock);
     long ms_left;
     
     if (boz_clock_is_direction_forwards(clock))
-        ms_left = rules.time_limit_sec * 1000L - ms;
+        ms_left = rules->time_limit_sec * 1000L - ms;
     else
         ms_left = ms;
 
     update_clock_value_tenths(ms);
 
-    if (rules.warn_remaining_sec > 0 && ms_left <= rules.warn_remaining_sec * 1000L) {
+    if (rules->warn_remaining_sec > 0 && ms_left <= rules->warn_remaining_sec * 1000L) {
         int issued_warning = 0;
         int sec_left = (int) ((ms_left + 999L) / 1000L); // no of secs or part secs left
         if (sec_left > 0 && (state->most_recent_warning_remain_sec == 0 ||
@@ -575,7 +580,7 @@ con_alarm_handler(void *cookie, struct boz_clock *clock) {
 }
 
 void
-con_time_expired_handler(void *cookie, struct boz_clock *clock) {
+con_time_expired_handler(void *cookie, boz_clock clock) {
     struct conundrum_state *state = (struct conundrum_state *) cookie;
     byte time_up_arp[] = { NOTE_C2, 0, NOTE_C2, 0 };
 
@@ -594,13 +599,9 @@ con_time_expired_handler(void *cookie, struct boz_clock *clock) {
 static void make_buzzer_noise(int noise, int buzzer) {
     switch (noise) {
         default:
-        case BUZZER_NOISE_DEFAULT: {
-            byte arp[] = { NOTE_B6, NOTE_E3, NOTE_B6, NOTE_E4 };
-            arp[1] += buzzer * 12;
-            arp[3] += buzzer * 12;
-            boz_sound_arpeggio(arp, 4, 100, rules.buzz_length_tenths);
-        }
-        break;
+        case BUZZER_NOISE_DEFAULT:
+            boz_sound_square_bell(buzzer, rules->buzz_length_tenths);
+            break;
 
         case BUZZER_NOISE_FANFARE: {
             const int beat_ms = 120;
@@ -614,14 +615,14 @@ static void make_buzzer_noise(int noise, int buzzer) {
         break;
 
         case BUZZER_NOISE_RISING: {
-            boz_sound_varying(NOTE_C4, NOTE_C8, 100 * rules.buzz_length_tenths, 1);
+            boz_sound_varying(NOTE_C4, NOTE_C8, 100 * rules->buzz_length_tenths, 1);
         }
         break;
 
         case BUZZER_NOISE_1UP: {
             byte arp[] = { NOTE_F6, NOTE_F4, NOTE_F6 };
             for (int i = 0; i < 3; ++i) {
-                boz_sound_arpeggio(arp, 3, rules.buzz_length_tenths * 100 / 3, 1);
+                boz_sound_arpeggio(arp, 3, rules->buzz_length_tenths * 100 / 3, 1);
                 for (int j = 0; j < 3; ++j) {
                     arp[j] += 2;
                 }
@@ -641,19 +642,19 @@ static void accept_buzz(struct conundrum_state *state, int which_buzzer) {
     /* If we get here, the clock is running. Stop the clock if the rules
        require it, record the buzz time, then update the display and LEDs
        with the current state. */
-    if (rules.buzz_stops_clock) {
+    if (rules->buzz_stops_clock) {
         boz_clock_stop(state->clock);
     }
     else {
-        if (rules.lockout_time_ms > 0) {
-            boz_set_alarm((long) rules.lockout_time_ms, con_unlock_buzzers, state);
+        if (rules->lockout_time_ms > 0) {
+            boz_set_alarm((long) rules->lockout_time_ms, con_unlock_buzzers, state);
         }
     }
     state->current_buzzer = which_buzzer;
     state->last_buzzer = which_buzzer;
     state->last_buzz_at_millis = millis();
 
-    if (rules.two_sides) {
+    if (rules->two_sides) {
         int which_side = BUZZER_TO_SIDE(which_buzzer);
         state->buzz_times[which_side] = boz_clock_value(state->clock);
         state->buzzed[which_side] = 1;
@@ -665,26 +666,26 @@ static void accept_buzz(struct conundrum_state *state, int which_buzzer) {
     /* Whatever we're bleating out into the world, stop and make a buzzer noise */
     boz_sound_stop_all();
 
-    if (rules.buzz_length_tenths > 0) {
-        make_buzzer_noise(rules.buzzer_noise, which_buzzer);
+    if (rules->buzz_length_tenths > 0) {
+        make_buzzer_noise(rules->buzzer_noise, which_buzzer);
     }
 
     redraw_display(state);
 }
 
 static int is_entitled_to_buzz(struct conundrum_state *state, int which_buzzer) {
-    if (!rules.two_sides) {
+    if (!rules->two_sides) {
         if (which_buzzer < 0 || which_buzzer >= NUM_BUZZERS)
             return 0;
         else
-            return rules.allow_rebuzz || !state->buzzed[which_buzzer];
+            return rules->allow_rebuzz || !state->buzzed[which_buzzer];
     }
     else {
         int which_side = BUZZER_TO_SIDE(which_buzzer);
         if (which_side < 0 || which_side > 1)
             return 0;
         else
-            return rules.allow_rebuzz || !state->buzzed[which_side];
+            return rules->allow_rebuzz || !state->buzzed[which_side];
     }
 }
 
@@ -722,7 +723,7 @@ con_buzz_handler(void *cookie, int which_buzzer) {
                     millis_end = state->time_expired_at_millis;
 
                 state->late_buzz_ms[which_side] = time_elapsed(millis_end, millis());
-                if (rules.two_sides && rules.show_buzz_time) {
+                if (rules->two_sides && rules->show_buzz_time) {
                     update_late_buzz(which_side != 0, state->late_buzz_ms[which_side]);
                 }
             }
@@ -828,14 +829,14 @@ void set_up_clock(struct conundrum_state *state) {
     boz_clock_stop(state->clock);
     boz_clock_cancel_expiry_max(state->clock);
     boz_clock_cancel_expiry_min(state->clock);
-    if (rules.time_limit_sec) {
-        boz_clock_set_direction(state->clock, rules.clock_counts_up);
-        if (rules.clock_counts_up) {
+    if (rules->time_limit_sec) {
+        boz_clock_set_direction(state->clock, rules->clock_counts_up);
+        if (rules->clock_counts_up) {
             boz_clock_set_initial_value(state->clock, 0);
-            boz_clock_set_expiry_max(state->clock, rules.time_limit_sec * 1000L, con_time_expired_handler);
+            boz_clock_set_expiry_max(state->clock, rules->time_limit_sec * 1000L, con_time_expired_handler);
         }
         else {
-            boz_clock_set_initial_value(state->clock, rules.time_limit_sec * 1000L);
+            boz_clock_set_initial_value(state->clock, rules->time_limit_sec * 1000L);
             boz_clock_set_expiry_min(state->clock, 0, con_time_expired_handler);
         }
     }
@@ -850,45 +851,96 @@ void set_up_clock(struct conundrum_state *state) {
 void
 con_options_return_callback(void *cookie, int rc) {
     struct conundrum_state *state = (struct conundrum_state *) cookie;
+    struct option_menu_context *omc = state->con_options_context;
     if (rc == 0) {
-        rules.time_limit_sec = (int) con_options_return[CON_OPTIONS_INDEX_TIME_LIMIT];
+        if (omc == NULL) {
+            /* con_options_context was never allocated before we called the
+               options menu app? */
+            redraw_display(state);
+            return;
+        }
+        long *con_options_return = omc->results;
+
+        rules->time_limit_sec = (int) con_options_return[CON_OPTIONS_INDEX_TIME_LIMIT];
         if (state->time_expired || !state->clock_has_started)
             set_up_clock(state);
 
-        rules.warn_remaining_sec = (int) con_options_return[CON_OPTIONS_INDEX_WARN_TIME];
-        rules.buzz_length_tenths = (int) (con_options_return[CON_OPTIONS_INDEX_BUZZ_LENGTH] / 100);
-        rules.buzzer_noise = (char) con_options_return[CON_OPTIONS_INDEX_BUZZ_NOISE];
-        rules.allow_rebuzz = (char) con_options_return[CON_OPTIONS_INDEX_ALLOW_REBUZZ];
-        rules.lockout_time_ms = (int) (con_options_return[CON_OPTIONS_INDEX_LOCKOUT_TIME]);
+        rules->warn_remaining_sec = (int) con_options_return[CON_OPTIONS_INDEX_WARN_TIME];
+        rules->buzz_length_tenths = (int) (con_options_return[CON_OPTIONS_INDEX_BUZZ_LENGTH] / 100);
+        rules->buzzer_noise = (char) con_options_return[CON_OPTIONS_INDEX_BUZZ_NOISE];
+        rules->allow_rebuzz = (char) con_options_return[CON_OPTIONS_INDEX_ALLOW_REBUZZ];
 
-        if (rules.two_sides)
-            rules.first_c2_buzzer = (char) (con_options_return[CON_OPTIONS_INDEX_WHICH_BUZZERS] + 1);
+        if (!rules->buzz_stops_clock)
+            rules->lockout_time_ms = (int) (con_options_return[CON_OPTIONS_INDEX_LOCKOUT_TIME]);
+
+        if (rules->two_sides)
+            rules->first_c2_buzzer = (char) (con_options_return[CON_OPTIONS_INDEX_WHICH_BUZZERS] + 1);
     }
+
+    /* Free the array of options context structure we created for the options
+       menu app. */
+    if (omc != NULL) {
+        boz_mm_free(omc->results);
+        boz_mm_free(omc);
+        state->con_options_context = NULL;
+    }
+
     redraw_display(state);
 }
 
 void
 con_rotary_press(void *cookie) {
     struct conundrum_state *state = (struct conundrum_state *) cookie;
+    long *con_options_return;
+    struct option_menu_context *omc;
 
-    if (!boz_clock_running(state->clock)) {
-        con_options_return[CON_OPTIONS_INDEX_TIME_LIMIT] = rules.time_limit_sec;
-        con_options_return[CON_OPTIONS_INDEX_WARN_TIME] = rules.warn_remaining_sec;
-        con_options_return[CON_OPTIONS_INDEX_BUZZ_LENGTH] = rules.buzz_length_tenths * 100;
-        con_options_return[CON_OPTIONS_INDEX_BUZZ_NOISE] = rules.buzzer_noise;
-        con_options_return[CON_OPTIONS_INDEX_ALLOW_REBUZZ] = rules.allow_rebuzz;
-        con_options_return[CON_OPTIONS_INDEX_LOCKOUT_TIME] = (long) rules.lockout_time_ms;
-        con_options_return[CON_OPTIONS_INDEX_WHICH_BUZZERS] = rules.first_c2_buzzer - 1;
+    if (boz_clock_running(state->clock)) {
+        return;
+    }
 
-        /* Only include the "which buzzers?" question if two_sides is set */
-        if (rules.two_sides)
-            con_options_context.num_options = CON_OPTIONS_INDEX_WHICH_BUZZERS + 1;
-        else
-            con_options_context.num_options = CON_OPTIONS_INDEX_WHICH_BUZZERS;
+    omc = (struct option_menu_context *) boz_mm_alloc(sizeof(struct option_menu_context));
+    if (omc == NULL)
+        goto fail;
+    state->con_options_context = omc;
 
-        if (boz_app_call(BOZ_APP_ID_OPTION_MENU, &con_options_context, con_options_return_callback, state)) {
-            // lolfail
-        }
+    omc->results = (long *) boz_mm_alloc(sizeof(long) * CON_OPTIONS_LENGTH);
+    if (omc->results == NULL)
+        goto fail;
+
+    omc->options = conundrum_options;
+    omc->one_shot = 0;
+
+    con_options_return = omc->results;
+
+    con_options_return[CON_OPTIONS_INDEX_TIME_LIMIT] = rules->time_limit_sec;
+    con_options_return[CON_OPTIONS_INDEX_WARN_TIME] = rules->warn_remaining_sec;
+    con_options_return[CON_OPTIONS_INDEX_BUZZ_LENGTH] = rules->buzz_length_tenths * 100;
+    con_options_return[CON_OPTIONS_INDEX_BUZZ_NOISE] = rules->buzzer_noise;
+    con_options_return[CON_OPTIONS_INDEX_ALLOW_REBUZZ] = rules->allow_rebuzz;
+    con_options_return[CON_OPTIONS_INDEX_LOCKOUT_TIME] = (long) rules->lockout_time_ms;
+    con_options_return[CON_OPTIONS_INDEX_WHICH_BUZZERS] = rules->first_c2_buzzer - 1;
+
+    /* Only include the "which buzzers?" question if two_sides is set, and only
+       include the lockout time question if the buzzer doesn't stop the clock.
+     */
+    omc->page_disable_mask = 0;
+    if (!rules->two_sides)
+        omc->page_disable_mask |= (1 << CON_OPTIONS_INDEX_WHICH_BUZZERS);
+    if (rules->buzz_stops_clock)
+        omc->page_disable_mask |= (1 << CON_OPTIONS_INDEX_LOCKOUT_TIME);
+
+    omc->num_options = CON_OPTIONS_LENGTH;
+
+    if (boz_app_call(BOZ_APP_ID_OPTION_MENU, omc, con_options_return_callback, state)) {
+        goto fail;
+    }
+    return;
+
+fail:
+    if (state->con_options_context != NULL) {
+        boz_mm_free(state->con_options_context->results);
+        boz_mm_free(state->con_options_context);
+        state->con_options_context = NULL;
     }
 }
 
@@ -913,24 +965,26 @@ con_generate_target(void *cookie) {
 
 void
 conundrum_general_init(const struct game_rules *rules_progmem) {
-    memcpy_P(&rules, rules_progmem, sizeof(rules));
-    statep = &con_state;
+    rules = (struct game_rules *) boz_mm_alloc(sizeof(*rules));
+    con_state = (struct conundrum_state *) boz_mm_alloc(sizeof(*con_state));
 
-    statep->clock = boz_clock_create(0, 1);
+    memcpy_P(rules, rules_progmem, sizeof(*rules));
 
-    con_reset_state(statep);
+    con_state->clock = boz_clock_create(0, 1);
+
+    con_reset_state(con_state);
 
     boz_set_event_handler_buzz(con_buzz_handler);
     boz_set_event_handler_qm_play(con_play);
     boz_set_event_handler_qm_reset(con_reset);
-    if (rules.yellow_generates_target)
+    if (rules->yellow_generates_target)
         boz_set_event_handler_qm_yellow(con_generate_target);
     else
         boz_set_event_handler_qm_yellow(con_unlock_buzzers);
     boz_set_event_handler_qm_rotary_press(con_rotary_press);
-    boz_set_event_cookie(statep);
+    boz_set_event_cookie(con_state);
 
-    boz_clock_set_event_cookie(statep->clock, statep);
+    boz_clock_set_event_cookie(con_state->clock, con_state);
 }
 
 void

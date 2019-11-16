@@ -15,6 +15,8 @@ extern void chess_init(void *);
 extern void option_menu_init(void *);
 extern void music_loop_init(void *);
 extern void sysinfo_init(void *);
+extern void crash_init(void *);
+extern void backlight_init(void *);
 
 #ifdef BOZ_SERIAL
 extern void pcc_init(void *);
@@ -29,8 +31,15 @@ const PROGMEM struct boz_app app_list[] = {
     { BOZ_APP_ID_BUZZER_ROUND, "Buzzer round", buzzer_round_init, BOZ_APP_MAIN },
     { BOZ_APP_ID_CHESS_CLOCKS, "Chess clocks", chess_init, BOZ_APP_MAIN },
 #endif
+
+    /* Not enough room for the null terminator, so don't have one here.
+       The main menu app will still only read the first 16 characters. */
+    { BOZ_APP_ID_BACKLIGHT, { 'B', 'a', 'c', 'k', 'l', 'i', 'g', 'h', 't', ' ', 'o', 'n', '/', 'o', 'f', 'f' }, backlight_init, BOZ_APP_MAIN },
+
     { BOZ_APP_ID_SYSINFO, "System info", sysinfo_init, BOZ_APP_MAIN },
+
     { BOZ_APP_ID_OPTION_MENU, "Option menu", option_menu_init, 0 },
+    { BOZ_APP_ID_CRASH, "Crash", crash_init, 0 },
 };
 
 #if 0

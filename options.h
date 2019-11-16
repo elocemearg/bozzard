@@ -41,8 +41,16 @@ struct option_page {
 };
 
 struct option_menu_context {
+    /* Pointer to program memory, containing information on each option page. */
     const struct option_page *options;
+
+    /* The number of option pages in "options". */
     int num_options;
+
+    /* If page_disable_mask is 0, all pages in "options" are enabled. If not,
+     * then if the bit representing (1 << page) is set, then that page will be
+     * skipped over and its value in "results" will be unchanged. */
+    int page_disable_mask;
 
     /* Must point to an array of num_options longs */
     long *results;
