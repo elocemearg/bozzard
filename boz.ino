@@ -18,6 +18,7 @@
 #define APP_CONTEXT_STACK_SIZE 4
 #define NUM_CLOCKS BOZ_NUM_CLOCKS // must be less than the number of bits in an int
 #define BOZ_DYN_ARENA_SIZE 512
+#define BOZ_SOUND_RAMP_LOG // better sound-ramp effect, but +2KB code size
 
 #define BOZ_NUM_CHAR_PATTERNS 7
 const PROGMEM byte boz_char_patterns[][8] = {
@@ -95,8 +96,14 @@ struct button_state {
     /* If button_function is FUNC_BUZZER, which buzzer it is: 0 to 3 */
     byte buzzer_id;
 
-    byte press_threshold_ms;
-    byte release_threshold_ms;
+    /* Number of microseconds we must have a continuous signal on a button's
+       pin before we consider that button pressed. */
+    unsigned int press_threshold_us;
+
+    /* Number of microseconds we must have a continuous no-signal on a button's
+       pin before we consider that button released, after which point a new
+       signal will be interpreted as a new press. */
+    unsigned int release_threshold_us;
 
     /* If is_pressed, pressed_since_micros is the value of micros() since when
        the button has been continuously pressed.
@@ -133,10 +140,10 @@ struct disp_cmd_state disp_cmd_state;
 boz_clock clocks[NUM_CLOCKS];
 unsigned int master_clocks_enabled = 0; // bitmask
 
-const byte BUTTON_PRESS_THRESHOLD_MS = 0;
-const byte BUTTON_RELEASE_THRESHOLD_MS = 15;
-const byte ROTARY_CLOCK_PRESS_THRESHOLD_MS = 0;
-const byte ROTARY_CLOCK_RELEASE_THRESHOLD_MS = 5;
+const unsigned int BUTTON_PRESS_THRESHOLD_US = 0;
+const unsigned int BUTTON_RELEASE_THRESHOLD_US = 15000;
+const unsigned int ROTARY_CLOCK_PRESS_THRESHOLD_US = 0;
+const unsigned int ROTARY_CLOCK_RELEASE_THRESHOLD_US = 5000;
 
 /* If the number of milliseconds between two clock pulses from the rotary
    encoder (with the data pin indicating the same direction) is less than
@@ -144,18 +151,27 @@ const byte ROTARY_CLOCK_RELEASE_THRESHOLD_MS = 5;
    and disregard it. */
 const byte ROTARY_TURN_MIN_GAP_MS = 15;
 
+/* Next time we check all the buttons to see which one, if any, was pressed,
+   this tells is which button we check first and which way we iterate through
+   the list. This is varied to ensure fairness in the unlikely event that two
+   buzzers are pressed simultaneously. */
+char button_check_start = 0;
+char button_check_direction = 1;
+
 struct button_state buttons[] = {
-    { PIN_BUZZER_0,  FUNC_BUZZER, 0, BUTTON_PRESS_THRESHOLD_MS, BUTTON_RELEASE_THRESHOLD_MS, 0, 0, 0, 0, 1 },
-    { PIN_BUZZER_1,  FUNC_BUZZER, 1, BUTTON_PRESS_THRESHOLD_MS, BUTTON_RELEASE_THRESHOLD_MS, 1, 0, 0, 0, 1 },
-    { PIN_BUZZER_2,  FUNC_BUZZER, 2, BUTTON_PRESS_THRESHOLD_MS, BUTTON_RELEASE_THRESHOLD_MS, 2, 0, 0, 0, 1 },
-    { PIN_BUZZER_3,  FUNC_BUZZER, 3, BUTTON_PRESS_THRESHOLD_MS, BUTTON_RELEASE_THRESHOLD_MS, 3, 0, 0, 0, 1 },
-    { PIN_QM_PLAY,   FUNC_PLAY,   0, BUTTON_PRESS_THRESHOLD_MS, BUTTON_RELEASE_THRESHOLD_MS, 0, 0, 0, 0, 1 },
-    { PIN_QM_YELLOW, FUNC_YELLOW, 0, BUTTON_PRESS_THRESHOLD_MS, BUTTON_RELEASE_THRESHOLD_MS, 0, 0, 0, 0, 1 },
-    { PIN_QM_RESET,  FUNC_RESET,  0, BUTTON_PRESS_THRESHOLD_MS, BUTTON_RELEASE_THRESHOLD_MS, 0, 0, 0, 0, 1 },
-    { PIN_QM_RE_KEY, FUNC_RE_KEY, 0, BUTTON_PRESS_THRESHOLD_MS, BUTTON_RELEASE_THRESHOLD_MS, 0, 0, 0, 0, 1 },
-    { PIN_QM_RE_CLOCK, FUNC_RE_CLOCK, 0, ROTARY_CLOCK_PRESS_THRESHOLD_MS, ROTARY_CLOCK_RELEASE_THRESHOLD_MS, 0, 0, 0, 0, 1 },
+    { PIN_BUZZER_0,  FUNC_BUZZER, 0, BUTTON_PRESS_THRESHOLD_US, BUTTON_RELEASE_THRESHOLD_US, 0, 0, 0, 0, 1 },
+    { PIN_BUZZER_1,  FUNC_BUZZER, 1, BUTTON_PRESS_THRESHOLD_US, BUTTON_RELEASE_THRESHOLD_US, 1, 0, 0, 0, 1 },
+    { PIN_BUZZER_2,  FUNC_BUZZER, 2, BUTTON_PRESS_THRESHOLD_US, BUTTON_RELEASE_THRESHOLD_US, 2, 0, 0, 0, 1 },
+    { PIN_BUZZER_3,  FUNC_BUZZER, 3, BUTTON_PRESS_THRESHOLD_US, BUTTON_RELEASE_THRESHOLD_US, 3, 0, 0, 0, 1 },
+    { PIN_QM_PLAY,   FUNC_PLAY,   0, BUTTON_PRESS_THRESHOLD_US, BUTTON_RELEASE_THRESHOLD_US, 0, 0, 0, 0, 1 },
+    { PIN_QM_YELLOW, FUNC_YELLOW, 0, BUTTON_PRESS_THRESHOLD_US, BUTTON_RELEASE_THRESHOLD_US, 0, 0, 0, 0, 1 },
+    { PIN_QM_RESET,  FUNC_RESET,  0, BUTTON_PRESS_THRESHOLD_US, BUTTON_RELEASE_THRESHOLD_US, 0, 0, 0, 0, 1 },
+    { PIN_QM_RE_KEY, FUNC_RE_KEY, 0, BUTTON_PRESS_THRESHOLD_US, BUTTON_RELEASE_THRESHOLD_US, 0, 0, 0, 0, 1 },
+    { PIN_QM_RE_CLOCK, FUNC_RE_CLOCK, 0, ROTARY_CLOCK_PRESS_THRESHOLD_US, ROTARY_CLOCK_RELEASE_THRESHOLD_US, 0, 0, 0, 0, 1 },
 };
 const int num_buttons = sizeof(buttons) / sizeof(buttons[0]);
+#define BOZ_FIRST_BUZZER_BUTTON_INDEX 0
+#define BOZ_LAST_BUZZER_BUTTON_INDEX 3
 
 int re_data_value_last_clock = HIGH;
 unsigned long re_last_turn_high_ms = 0;
@@ -581,12 +597,25 @@ static void snd_cmd_step(unsigned long now_ms) {
         long this_step_ms;
         unsigned int desired_freq;
 
+        /* If you define BOZ_SOUND_RAMP_LOG and use logarithmic scaling, the
+           use of the pow() function and floating point arithmetic bloats the
+           code size by 2KB!
+           Consider un-defining BOZ_SOUND_RAMP_LOG if there's a shortage of
+           code space. */
+#ifdef BOZ_SOUND_RAMP_LOG
         /* Scale the frequency logarithmically between the start and end
            frequency */
         /*  start_freq * (freq_end/freq_start) ^ ((now - start) / duration) */
         desired_freq = (int) (snd_cmd_state.cmd.freq_start *
                 pow((float) snd_cmd_state.cmd.freq_end / snd_cmd_state.cmd.freq_start,
                     (float) (now_ms - snd_cmd_state.start_millis) / snd_cmd_state.cmd.duration_ms));
+#else
+        /* Scale the frequency linearly between the start and end frequency
+           using the Arduino map() function */
+        desired_freq = map(now_ms, snd_cmd_state.start_millis,
+                snd_cmd_state.start_millis + snd_cmd_state.cmd.duration_ms,
+                snd_cmd_state.cmd.freq_start, snd_cmd_state.cmd.freq_end);
+#endif
 
         remaining_ms = time_elapsed(now_ms, snd_cmd_state.start_millis + snd_cmd_state.cmd.duration_ms);
 
@@ -924,12 +953,25 @@ void loop() {
     }
 
     if (app_context) {
-        /* Check if any buttons have changed state since we last checked */
-        for (int i = 0; i < num_buttons; ++i) {
-            struct button_state *button = &buttons[i];
+        /* Check if any buttons have changed state since we last checked.
+
+           If we always checked the buttons in the same order, then if two
+           buttons were pressed at the same time, or so close together that
+           we couldn't tell which was first, then lower-numbered buzzers
+           would always win.
+
+           So to make it fair, each time round the main loop we vary which
+           button we check first, and whether we iterate through the button
+           list forwards or backwards.
+         */
+
+        int button_index = (int) button_check_start;
+        do {
+            struct button_state *button = &buttons[button_index];
             byte bval = read_button_value(button->pin);
 
             if (bval == (button->active_low ? HIGH : LOW)) {
+                /* Button is not held down */
                 if (button->is_pressed) {
                     /* If it was pressed, it no longer is, so record when we
                        saw the button get released */
@@ -937,8 +979,8 @@ void loop() {
                     button->released_since_micros = us;
                 }
                 if (button->event_delivered) {
-                    if (button->release_threshold_ms == 0 ||
-                            time_elapsed(button->released_since_micros, us) / 1000 >= button->release_threshold_ms) {
+                    if (button->release_threshold_us == 0 ||
+                            time_elapsed(button->released_since_micros, us) >= button->release_threshold_us) {
                         /* Button has been released long enough that if we see
                            another press, we should consider it another event */
                         button->event_delivered = 0;
@@ -946,6 +988,7 @@ void loop() {
                 }
             }
             else {
+                /* Button is held down */
                 if (!button->is_pressed) {
                     /* Button has changed state to "pressed". */
                     button->is_pressed = 1;
@@ -960,11 +1003,10 @@ void loop() {
                     }
                 }
                 if (!button->event_delivered &&
-                        (button->press_threshold_ms == 0 ||
-                         time_elapsed(button->pressed_since_micros, us) / 1000 >= button->press_threshold_ms)) {
+                        (button->press_threshold_us == 0 ||
+                         time_elapsed(button->pressed_since_micros, us) >= button->press_threshold_us)) {
                     /* Button has been continuously pressed long enough that we
-                       can consider it an actual press, not crazy bouncing
-                       noise */
+                       can consider it an actual press. */
                     if (button->button_function == FUNC_RE_CLOCK) {
                         unsigned long *last_turn_ms;
                         /* We've seen a falling edge of the rotary encoder's
@@ -989,6 +1031,8 @@ void loop() {
                         button->event_delivered = 1;
                     }
                     else {
+                        /* Call the application's event handler for this
+                           button, if there is one. */
                         deliver_button_event(button);
                     }
                 }
@@ -1002,6 +1046,30 @@ void loop() {
             if (button->is_pressed || button->event_delivered) {
                 buttons_busy = 1;
             }
+
+            /* Move on to the next button in the array, and finish if we've
+               reached the button we started on */
+            button_index += button_check_direction;
+            if (button_index < 0)
+                button_index = num_buttons - 1;
+            else if (button_index >= num_buttons)
+                button_index = 0;
+        } while (button_index != button_check_start);
+
+        if (button_check_direction < 0) {
+            /* If we went backwards this time, next time switch to forwards
+               and start with the button after the one we started this time,
+               subject to always starting on a buzzer pin (that is, not an
+               operator button like play or reset). */
+            button_check_direction = 1;
+            button_check_start++;
+            if (button_check_start > BOZ_LAST_BUZZER_BUTTON_INDEX)
+                button_check_start = BOZ_FIRST_BUZZER_BUTTON_INDEX;
+        }
+        else {
+            /* If we went forwards this time, go backwards next time, starting
+               from the same place. */
+            button_check_direction = -1;
         }
     }
 
