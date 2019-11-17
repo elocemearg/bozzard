@@ -4,14 +4,15 @@
 
 #include "boz_mm.h"
 
-#define boz_mm_align sizeof(long)
+#define boz_mm_align_type long
+#define boz_mm_align sizeof(boz_mm_align_type)
 #define BOZ_MM_LIST_STACK_SIZE 4
 
 #define BOZ_MM_TAG_FREE 0x6472
 #define BOZ_MM_TAG_USED 0x7573
 
 char *boz_mm_arena = NULL;
-size_t boz_mm_arena_size = 0;
+boz_mm_size boz_mm_arena_size = 0;
 byte crash_on_alloc_failure = 1;
 
 extern void boz_crash(int);
@@ -19,7 +20,7 @@ extern void boz_crash(int);
 struct boz_mm_header {
     union {
         struct {
-            /* What kind of chunk this is - BOZ_MM_TAG_FREE or BOZ_MM_TAG_USED */
+            /* What kind of chunk - BOZ_MM_TAG_FREE or BOZ_MM_TAG_USED */
             int tag;
 
             /* Next chunk in the list */
@@ -29,9 +30,9 @@ struct boz_mm_header {
             struct boz_mm_header *prev;
 
             /* Size of this chunk, including the header */
-            size_t size;
+            boz_mm_size size;
         };
-        long padding;
+        boz_mm_align_type padding;
     };
 };
 
@@ -107,7 +108,7 @@ static void mm_list_insert(struct boz_mm_header **startp, struct boz_mm_header *
     mm_list_add(startp, prev, header);
 }
 
-static void mm_split_chunk(struct boz_mm_header *header, size_t size) {
+static void mm_split_chunk(struct boz_mm_header *header, boz_mm_size size) {
     struct boz_mm_header *next;
 
     mm_assert(size % boz_mm_align == 0, 6);
@@ -141,9 +142,9 @@ static void mm_check_list_in_order(struct boz_mm_header *list) {
 }
 #endif
 
-void *boz_mm_alloc(size_t net_size) {
+void *boz_mm_alloc(boz_mm_size net_size) {
     /* Gross size: size including header and any alignment padding */
-    size_t gross_size = net_size + sizeof(struct boz_mm_header);
+    boz_mm_size gross_size = net_size + sizeof(struct boz_mm_header);
     struct boz_mm_header *header;
 
     if (net_size == 0)
@@ -235,7 +236,7 @@ void boz_mm_free(void *ptr) {
 #endif
 }
 
-void *boz_mm_main_alloc(size_t size) {
+void *boz_mm_main_alloc(boz_mm_size size) {
     struct boz_mm_header *old_used_list = boz_mm_used_list;
     void *p;
     boz_mm_used_list = boz_mm_main_used_list;
@@ -272,9 +273,9 @@ int boz_mm_pop_context() {
     return 0;
 }
 
-size_t boz_mm_largest_free() {
+boz_mm_size boz_mm_largest_free() {
     struct boz_mm_header *h;
-    size_t largest = 0;
+    boz_mm_size largest = 0;
 
     for (h = boz_mm_free_list; h; h = h->next) {
         if (h->size - sizeof(struct boz_mm_header) > largest)
@@ -283,11 +284,11 @@ size_t boz_mm_largest_free() {
     return largest;
 }
 
-size_t boz_mm_total_size() {
+boz_mm_size boz_mm_total_size() {
     return boz_mm_arena_size;
 }
 
-void boz_mm_init(char *arena, size_t arena_size) {
+void boz_mm_init(char *arena, boz_mm_size arena_size) {
     boz_mm_arena = arena;
     boz_mm_arena_size = arena_size;
     boz_mm_used_list = NULL;

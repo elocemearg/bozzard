@@ -1,4 +1,4 @@
-#include "boz.h"
+#include "boz_api.h"
 
 const PROGMEM char s_crash_guru[] = "Guru meditation";
 

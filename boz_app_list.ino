@@ -7,21 +7,6 @@
 
 #define APP_LIST_LENGTH (sizeof(app_list) / sizeof(app_list[0]))
 
-extern void main_menu_init(void *);
-extern void conundrum_init(void *);
-extern void test_init(void *);
-extern void buzzer_round_init(void *);
-extern void chess_init(void *);
-extern void option_menu_init(void *);
-extern void music_loop_init(void *);
-extern void sysinfo_init(void *);
-extern void crash_init(void *);
-extern void backlight_init(void *);
-
-#ifdef BOZ_SERIAL
-extern void pcc_init(void *);
-#endif
-
 const PROGMEM struct boz_app app_list[] = {
     { BOZ_APP_ID_MAIN_MENU, "Menu", main_menu_init, 0 },
 #ifdef BOZ_SERIAL

@@ -1,4 +1,4 @@
-#include "boz.h"
+#include "boz_api.h"
 
 #include <avr/pgmspace.h>
 

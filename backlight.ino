@@ -1,4 +1,4 @@
-#include "boz.h"
+#include "boz_api.h"
 
 void
 backlight_init(void *dummy) {

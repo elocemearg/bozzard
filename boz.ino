@@ -1,6 +1,5 @@
-#include "boz.h"
+#include "boz_api.h"
 #include "boz_util.h"
-#include "boz_clock.h"
 #include "boz_queue.h"
 #include "boz_shiftreg.h"
 #include "boz_lcd.h"

@@ -1,4 +1,4 @@
-#include "boz.h"
+#include "boz_api.h"
 #include "boz_sound.h"
 #include "boz_notes.h"
 

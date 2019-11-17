@@ -1,4 +1,5 @@
-#include "boz.h"
+#include "boz_api.h"
+#include "boz_display.h"
 #include <avr/pgmspace.h>
 
 int

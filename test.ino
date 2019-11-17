@@ -1,4 +1,4 @@
-#include "boz.h"
+#include "boz_api.h"
 
 static boz_clock clock;
 

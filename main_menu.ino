@@ -1,4 +1,4 @@
-#include "boz.h"
+#include "boz_api.h"
 
 #include "boz_app_list.h"
 #include "boz_app.h"

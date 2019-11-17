@@ -1,6 +1,5 @@
-#include "boz.h"
+#include "boz_api.h"
 #include "options.h"
-#include "boz_app_inits.h"
 
 #include <avr/pgmspace.h>
 

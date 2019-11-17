@@ -2,7 +2,7 @@
    sent to us on the serial port, and tells whatever's on the other end of the
    serial port when a buzz has occurred. */
 
-#include "boz.h"
+#include "boz_api.h"
 
 #ifdef BOZ_SERIAL
 
