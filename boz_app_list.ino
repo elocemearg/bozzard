@@ -21,7 +21,8 @@ const PROGMEM struct boz_app app_list[] = {
        The main menu app will still only read the first 16 characters. */
     { BOZ_APP_ID_BACKLIGHT, { 'B', 'a', 'c', 'k', 'l', 'i', 'g', 'h', 't', ' ', 'o', 'n', '/', 'o', 'f', 'f' }, backlight_init, BOZ_APP_MAIN },
 
-    { BOZ_APP_ID_SYSINFO, "System info", sysinfo_init, BOZ_APP_MAIN },
+    { BOZ_APP_ID_BATTERY, "Battery info", battery_init, BOZ_APP_MAIN },
+    { BOZ_APP_ID_SYSINFO, "About Bozzard", sysinfo_init, BOZ_APP_MAIN },
 
     { BOZ_APP_ID_OPTION_MENU, "Option menu", option_menu_init, 0 },
     { BOZ_APP_ID_CRASH, "Crash", crash_init, 0 },

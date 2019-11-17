@@ -11,6 +11,7 @@ extern void music_loop_init(void *);
 extern void sysinfo_init(void *);
 extern void crash_init(void *);
 extern void backlight_init(void *);
+extern void battery_init(void *);
 #ifdef BOZ_SERIAL
 extern void pcc_init(void *);
 #endif
@@ -22,6 +23,7 @@ enum BOZ_APP_ID {
     BOZ_APP_ID_BUZZER_ROUND,
     BOZ_APP_ID_CHESS_CLOCKS,
     BOZ_APP_ID_BACKLIGHT,
+    BOZ_APP_ID_BATTERY,
     BOZ_APP_ID_SYSINFO,
     BOZ_APP_ID_OPTION_MENU,
     BOZ_APP_ID_CRASH

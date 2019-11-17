@@ -12,6 +12,16 @@
 
 #include "boz_app_inits.h"
 
+
+#define BOZ_VERSION_MAJOR   1L
+#define BOZ_VERSION_MINOR   0L
+#define BOZ_VERSION_RELEASE 0L
+
+const long BOZ_VERSION = ((BOZ_VERSION_MAJOR << 24) |
+            (BOZ_VERSION_MINOR << 16) |
+            (BOZ_VERSION_RELEASE << 8));
+
+
 #define SND_CMD_QUEUE_SIZE 16
 #define DISP_CMD_QUEUE_SIZE 96
 #define APP_CONTEXT_STACK_SIZE 4
@@ -211,6 +221,11 @@ static void memzero(void *p, size_t n) {
         ++pc;
         --n;
     }
+}
+
+long
+boz_get_version(void) {
+    return BOZ_VERSION;
 }
 
 boz_clock 

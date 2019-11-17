@@ -2,15 +2,11 @@
 
 #include <avr/pgmspace.h>
 
-/* If the voltage at VIN is below this, we'll assume we're running from USB
-   and the battery isn't switched on. The Arduino Nano can run with 7V-12V at
-   VIN. The Bozzard control unit has a 9V supply. */
-#define VIN_MIN_MV 6000
-
-const PROGMEM char s_sysinfo_boz[] = "BOZZARD";
-const PROGMEM char s_sysinfo_battery[] = "Battery:";
-const PROGMEM char s_sysinfo_off[] = " off    ";
-const PROGMEM char s_compilation_date[] = __DATE__;
+const PROGMEM char s_sysinfo_boz_v[] = "Bozzard v";
+const PROGMEM char s_sysinfo_copyright[] = "(c) Graeme Cole";
+const PROGMEM char s_sysinfo_compiled_on[] = "Compiled on";
+const PROGMEM char s_sysinfo_compilation_date[] = __DATE__;
+byte sysinfo_current_page = 0;
 
 void
 sysinfo_init(void *dummy) {
@@ -19,7 +15,10 @@ sysinfo_init(void *dummy) {
     boz_set_event_handler_qm_yellow(sysinfo_exit);
     boz_set_event_handler_qm_play(sysinfo_exit);
 
-    sysinfo_refresh(NULL);
+    /* Turn the knob to switch pages */
+    boz_set_event_handler_qm_rotary(sysinfo_turn_page);
+
+    sysinfo_refresh(0);
 }
 
 void
@@ -28,44 +27,35 @@ sysinfo_exit(void *cookie) {
 }
 
 void
-sysinfo_refresh(void *cookie) {
-    byte date_offsets[] = { 4, 0, 7 };
-    byte date_lengths[] = { 2, 3, 4 };
-
-    boz_display_clear();
-
-    /* Write BOZZARD followed by the date the software was compiled */
-    boz_display_write_string_P(s_sysinfo_boz);
-    for (int i = 0; i < 3; ++i) {
-        for (int p = date_offsets[i]; p < date_offsets[i] + date_lengths[i]; ++p) {
-            boz_display_write_char(pgm_read_byte_near(s_compilation_date + p));
-        }
+sysinfo_turn_page(void *cookie, int clockwise) {
+    if (sysinfo_current_page != clockwise) {
+        sysinfo_refresh((byte) clockwise);
     }
-
-    /* Show the label "Battery:" then print the voltage */
-    boz_display_set_cursor(1, 0);
-    boz_display_write_string_P(s_sysinfo_battery);
-
-    sysinfo_refresh_battery(cookie);
 }
 
-void sysinfo_refresh_battery(void *cookie) {
-    int millivolts = boz_get_battery_voltage();
+void
+sysinfo_refresh(byte page) {
+    sysinfo_current_page = page;
 
-    boz_display_set_cursor(1, 8);
-    if (millivolts < VIN_MIN_MV) {
-        /* We're probably not running from a battery */
-        boz_display_write_string_P(s_sysinfo_off);
+    boz_display_clear();
+    if (page == 0) {
+        long version = boz_get_version();
+
+        /* Write Bozzard followed by the version number */
+        boz_display_write_string_P(s_sysinfo_boz_v);
+        for (int i = 0; i < 3; ++i) {
+            boz_display_write_long((version >> (24 - i * 8)) & 0xff, 0, NULL);
+            if (i < 2)
+                boz_display_write_char('.');
+        }
+
+        /* Show the copyright information */
+        boz_display_set_cursor(1, 0);
+        boz_display_write_string_P(s_sysinfo_copyright);
     }
     else {
-        /* Voltage format: ##.##V */
-        int centivolts = (millivolts + 5) / 10;
-        boz_display_write_long(centivolts / 100, 2, NULL);
-        boz_display_write_char('.');
-        boz_display_write_long(centivolts % 100, 2, "0");
-        boz_display_write_char('V');
+        boz_display_write_string_P(s_sysinfo_compiled_on);
+        boz_display_set_cursor(1, 0);
+        boz_display_write_string_P(s_sysinfo_compilation_date);
     }
-
-    /* Call sysinfo_refresh_battery once per second until this app exits */
-    boz_set_alarm(1000L, sysinfo_refresh_battery, NULL);
 }

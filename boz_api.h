@@ -43,8 +43,8 @@
  *    This app must have (at least) an init function.
  *    This init function returns void and takes a single void * argument. If
  *    your app is called from the main menu, this argument will be NULL.
- *    See sysinfo.ino (which displays the version number and battery voltage)
- *    for an example of a simple app.
+ *    See battery.ino (which displays the battery voltage) for an example of
+ *    a simple app.
  *
  * 2. Add a symbol for your app in the BOZ_APP_ID enum in boz_app_inits.h.
  *    For example, if your app is called FOOBAR, you might add the symbol
@@ -765,6 +765,16 @@ boz_cancel_alarm();
 /******************************************************************************
  * MISCELLANEOUS
  *****************************************************************************/
+
+/* boz_get_version
+ * Return the version number of the Bozzard API implementation.
+ * A 4-byte long is returned. The most significant byte is the major version
+ * number, the next most significant byte is the minor version number, and
+ * the next most significant byte is the release number. The least significant
+ * byte is not currently used.
+ */
+long
+boz_get_version(void);
 
 /* boz_is_button_pressed
  * Ask whether a button is considered "pressed" by the main loop. A button is
