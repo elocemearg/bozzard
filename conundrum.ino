@@ -4,147 +4,16 @@
 #include <avr/pgmspace.h>
 
 /* General-purpose program for games where you have lockout buzzers and a
-   clock. Exact behaviour is controlled by the following constants,
-   which must be set before conundrum_general_init() is called. */
+   clock. Exact behaviour is controlled by the values in
+   struct game_rules *rules, which must be set before conundrum_general_init()
+   is called. */
 
-struct game_rules {
-    /* time_limit_sec
-       The time limit for the game. This is in seconds. If the time limit is 0,
-       then the clock has no limit and always counts up, regardless of what
-       clock_counts_up says.
-    */
-    int time_limit_sec;
-
-    /* clock_counts_up
-       If true, the clock starts at zero and counts up untilit reaches
-       time_limit_sec (if set), at which point the game ends.
-       If false, the clock starts at time_limit_sec seconds and counts down
-       until it reads zero, at which point the game ends.
-       If time_limit_sec is zero, clock_counts_up has no effect - the clock
-       will count up regardless.
-    */
-    char clock_counts_up;
-
-    /* buzz_stops_clock
-       If true, an accepted buzz will stop the clock. The clock must be
-       manually restarted by the QM pressing the green (play) button.
-       If false, a buzz will not stop the clock. The clock may still be
-       manually stopped and restarted by the QM.
-    */
-    char buzz_stops_clock;
-
-    /* lockout_time_ms
-       When a buzz is accepted, and if buzz_stops_clock is false, keep that
-       buzzer's LED on and prevent anyone else from buzzing for this many
-       milliseconds. If lockout_time_ms is zero, the buzzers will never
-       automatically unlock - the QM must unlock them with the yellow button.
-
-       If buzz_stops_clock is true, lockout_time_ms has no effect - the LED
-       stays on and the other buzzers are locked out until the QM restarts the
-       clock.
-
-       Manually stopping and starting the clock with the QM controls always
-       unlocks the buzzers. */
-    unsigned int lockout_time_ms;
-
-    /* warn_remaining_sec
-       If nonzero, a warning pip will be given every second, on the second,
-       from when this many seconds are remaining.
-    */
-    int warn_remaining_sec;
-
-    /* buzz_length_tenths
-       Length of the buzzer noise, in tenths of a second.
-    */
-    int buzz_length_tenths;
-
-    /* allow_rebuzz
-       If true, there is no restriction on how many times each buzzer, or side,
-       may buzz.
-       If false, each side (see below) is only allowed one buzz for the
-       duration of the game.
-    */
-    char allow_rebuzz;
-
-    /* show_buzz_time
-       If true, when a player buzzes, the time showing on the clock when they
-       buzzed shows on the bottom line of the display, either on the left or
-       right depending on which side (see below) buzzed.
-       If false, the bottom line shows 1UP, 2UP, 3UP or 4UP, depending on who
-       last buzzed.
-    */
-    char show_buzz_time;
-
-    /* yellow_generates_target
-       If true, the yellow button generates a pseudorandom number between 101
-       and 999 inclusive and displays it in the top-left corner. This is pretty
-       much only useful for Countdown.
-       If false, the yellow button unlocks the buzzers. This is useful if
-       lockout_time_ms is large (or zero), if you want to unlock the buzzers
-       early (or at all).
-    */
-    char yellow_generates_target;
-
-    /* two_sides
-       If true, all buzzers whose (zero-based) index is less than
-       first_c2_buzzer are the "left" team or side, and all buzzers whose
-       index is equal to or greater than first_c2_buzzer are on the "right"
-       team or side.
-       If false, there are no teams or sides, each of the four buzzers is its
-       own player. */
-    char two_sides;
-
-    /* If two_sides is true, first_c2_buzzer is the buzzer index (zero-based)
-       of the leftmost buzzer who is on the right-hand side. All buzzers less
-       than this will be left side, all buzzers greater than or equal to it
-       will be right side. */
-    char first_c2_buzzer;
-
-    /* One of the buzzer noise IDs supported by make_buzzer_noise. */
-    char buzzer_noise;
-};
-
-/* Rules for the current game (pointer to dynamically allocated memory) */
-static struct game_rules *rules;
-
-const PROGMEM struct game_rules conundrum_rules = {
-    30,   // time_limit_sec
-    1,    // clock_counts_up
-    1,    // buzz_stops_clock
-    0,    // lockout_time_ms
-    5,    // warn_remaining_sec
-    8,    // buzz_length_tenths
-    0,    // allow_rebuzz
-    1,    // show_buzz_time
-    1,    // yellow_generates_target
-    1,    // two_sides
-    2,    // first_c2_buzzer (2): red and green are C1, yellow and blue are C2
-    0,    // buzzer_noise
-};
-
-const PROGMEM struct game_rules basic_buzzer_rules = {
-    0,    // time_limit_sec
-    0,    // clock_counts_up
-    0,    // buzz_stops_clock
-    3000, // lockout_time_ms
-    0,    // warn_remaining_sec
-    8,    // buzz_length_tenths
-    1,    // allow_rebuzz
-    0,    // show_buzz_time
-    0,    // yellow_generates_target
-    0,    // two_sides
-    1,    // first_c2_buzzer
-    0,    // buzzer_noise
-};
-
-#define BUZZER_NOISE_DEFAULT 0
-#define BUZZER_NOISE_FANFARE 1
-#define BUZZER_NOISE_RISING 2
-#define BUZZER_NOISE_1UP 3
 
 const PROGMEM char s_con_time_limit[] = "Time limit";
+const PROGMEM char s_con_clock_counts_up[] = "Clock counts up";
 const PROGMEM char s_con_warn_remaining[] = "Warn remaining";
-const PROGMEM char s_which_buzzers[] = "Which buzzers?";
+const PROGMEM char s_con_buzz_stops_clock[] = "Buzz stops clock";
+const PROGMEM char s_con_which_buzzers[] = "Which buzzers?";
 const PROGMEM char s_con_allow_rebuzz[] = "Allow re-buzz";
 const PROGMEM char s_con_lockout_time[] = "Lockout (ms)";
 const PROGMEM char s_con_lockout_null[] = "Until yellow btn";
@@ -154,6 +23,7 @@ const PROGMEM char s_con_buzz_noise_default[] = "Square Bell";
 const PROGMEM char s_con_buzz_noise_fanfare[] = "Fanfare";
 const PROGMEM char s_con_buzz_noise_rising[] = "Phantom's End";
 const PROGMEM char s_con_buzz_noise_1up[] = "1UP";
+const PROGMEM char s_con_buzz_noise_all[] = "All different";
 
 const PROGMEM char s_con_ready[] = BOZ_CHAR_PLAY_S " to start";
 const PROGMEM char s_con_time[] = "TIME UP  " BOZ_CHAR_RESET_S " reset";
@@ -162,20 +32,35 @@ const PROGMEM char s_con_right_arrow[] = "\x03\x03\x03\x03\x02";
 const PROGMEM char s_con_space5[] = "     ";
 const PROGMEM char s_con_up[] = "UP ";
 
-const PROGMEM char s_which_buzzers_1_234[] = "1 v 2,3,4";
-const PROGMEM char s_which_buzzers_12_34[] = "1&2 v 3&4";
-const PROGMEM char s_which_buzzers_123_4[] = "1,2,3 v 4";
-const PROGMEM char * const which_buzzers_list[] = {
-    s_which_buzzers_1_234,
-    s_which_buzzers_12_34,
-    s_which_buzzers_123_4
+const PROGMEM char s_con_which_buzzers_1_234[] = "1 v 2,3,4";
+const PROGMEM char s_con_which_buzzers_12_34[] = "1&2 v 3&4";
+const PROGMEM char s_con_which_buzzers_123_4[] = "1,2,3 v 4";
+const PROGMEM char s_con_which_buzzers_1234[] =  "1v2v3v4";
+const PROGMEM char * const s_con_which_buzzers_list[] = {
+    s_con_which_buzzers_1_234,
+    s_con_which_buzzers_12_34,
+    s_con_which_buzzers_123_4,
+    s_con_which_buzzers_1234,
 };
 const PROGMEM char * const s_con_buzz_noise_names[] = {
     s_con_buzz_noise_default,
     s_con_buzz_noise_fanfare,
     s_con_buzz_noise_rising,
     s_con_buzz_noise_1up,
+    s_con_buzz_noise_all
 };
+
+#define CON_OPTIONS_DISABLE_BIT(X) (1 << (X))
+#define CON_OPTIONS_INDEX_TIME_LIMIT 0
+#define CON_OPTIONS_INDEX_CLOCK_COUNTS_UP 1
+#define CON_OPTIONS_INDEX_WARN_TIME 2
+#define CON_OPTIONS_INDEX_BUZZ_STOPS_CLOCK 3
+#define CON_OPTIONS_INDEX_BUZZ_LENGTH 4
+#define CON_OPTIONS_INDEX_BUZZ_NOISE 5
+#define CON_OPTIONS_INDEX_ALLOW_REBUZZ 6
+#define CON_OPTIONS_INDEX_LOCKOUT_TIME 7
+#define CON_OPTIONS_INDEX_WHICH_BUZZERS 8
+#define CON_OPTIONS_LENGTH 9
 
 const PROGMEM struct option_page conundrum_options[] = {
     {
@@ -189,10 +74,30 @@ const PROGMEM struct option_page conundrum_options[] = {
         0
     },
     {
+        s_con_clock_counts_up,
+        OPTION_TYPE_YES_NO,
+        0,
+        0,
+        1,
+        NULL,
+        NULL,
+        0
+    },
+    {
         s_con_warn_remaining,
         OPTION_TYPE_CLOCK_SEC,
         0,
         60,
+        1,
+        NULL,
+        NULL,
+        0
+    },
+    {
+        s_con_buzz_stops_clock,
+        OPTION_TYPE_YES_NO,
+        0,
+        0,
         1,
         NULL,
         NULL,
@@ -239,33 +144,160 @@ const PROGMEM struct option_page conundrum_options[] = {
         0
     },
     {
-        s_which_buzzers,
+        s_con_which_buzzers,
         OPTION_TYPE_LIST,
         0,
         0,
         1,
         NULL,
-        which_buzzers_list,
-        3
+        s_con_which_buzzers_list,
+        sizeof(s_con_which_buzzers_list) / sizeof(s_con_which_buzzers_list[0])
     },
 };
 
-//long con_options_return[7];
-#define CON_OPTIONS_INDEX_TIME_LIMIT 0
-#define CON_OPTIONS_INDEX_WARN_TIME 1
-#define CON_OPTIONS_INDEX_BUZZ_LENGTH 2
-#define CON_OPTIONS_INDEX_BUZZ_NOISE 3
-#define CON_OPTIONS_INDEX_ALLOW_REBUZZ 4
-#define CON_OPTIONS_INDEX_LOCKOUT_TIME 5
-#define CON_OPTIONS_INDEX_WHICH_BUZZERS 6
-#define CON_OPTIONS_LENGTH 7
+struct game_rules {
+    /* time_limit_sec
+       The time limit for the game. This is in seconds. If the time limit is 0,
+       then the clock has no limit and always counts up, regardless of what
+       clock_counts_up says.
+    */
+    int time_limit_sec;
 
-/*struct option_menu_context con_options_context = {
-    conundrum_options,
-    sizeof(con_options_return) / sizeof(con_options_return[0]),
-    con_options_return
-};*/
+    /* lockout_time_ms
+       When a buzz is accepted, and if buzz_stops_clock is false, keep that
+       buzzer's LED on and prevent anyone else from buzzing for this many
+       milliseconds. If lockout_time_ms is zero, the buzzers will never
+       automatically unlock - the QM must unlock them with the yellow button.
 
+       If buzz_stops_clock is true, lockout_time_ms has no effect - the LED
+       stays on and the other buzzers are locked out until the QM restarts the
+       clock.
+
+       Manually stopping and starting the clock with the QM controls always
+       unlocks the buzzers. */
+    unsigned int lockout_time_ms;
+
+    /* warn_remaining_sec
+       If nonzero, a warning pip will be given every second, on the second,
+       from when this many seconds are remaining.
+    */
+    int warn_remaining_sec;
+
+    /* buzz_length_tenths
+       Length of the buzzer noise, in tenths of a second.
+    */
+    int buzz_length_tenths;
+
+    /* clock_counts_up
+       If true, the clock starts at zero and counts up until it reaches
+       time_limit_sec (if set), at which point the game ends.
+       If false, the clock starts at time_limit_sec seconds and counts down
+       until it reads zero, at which point the game ends.
+       If time_limit_sec is zero, clock_counts_up has no effect - the clock
+       will count up regardless.
+    */
+    unsigned int clock_counts_up : 1;
+
+    /* buzz_stops_clock
+       If true, an accepted buzz will stop the clock. The clock must be
+       manually restarted by the QM pressing the green (play) button.
+       If false, a buzz will not stop the clock. The clock may still be
+       manually stopped and restarted by the QM.
+    */
+    unsigned int buzz_stops_clock : 1;
+
+    /* allow_rebuzz
+       If true, there is no restriction on how many times each buzzer, or side,
+       may buzz.
+       If false, each side (see below) is only allowed one buzz for the
+       duration of the game.
+    */
+    unsigned int allow_rebuzz : 1;
+
+    /* show_buzz_time
+       If true, when a player buzzes, the time showing on the clock when they
+       buzzed shows on the bottom line of the display, either on the left or
+       right depending on which side (see below) buzzed.
+       If false, the bottom line shows 1UP, 2UP, 3UP or 4UP, depending on who
+       last buzzed.
+    */
+    unsigned int show_buzz_time : 1;
+
+    /* yellow_generates_target
+       If true, the yellow button generates a pseudorandom number between 101
+       and 999 inclusive and displays it in the top-left corner. This is pretty
+       much only useful for Countdown.
+       If false, the yellow button unlocks the buzzers. This is useful if
+       lockout_time_ms is large (or zero), if you want to unlock the buzzers
+       early (or at all).
+    */
+    unsigned int yellow_generates_target : 1;
+
+    /* two_sides
+       If true, all buzzers whose (zero-based) index is less than
+       first_c2_buzzer are the "left" team or side, and all buzzers whose
+       index is equal to or greater than first_c2_buzzer are on the "right"
+       team or side.
+       If false, there are no teams or sides, each of the four buzzers is its
+       own player. */
+    unsigned int two_sides : 1;
+
+    /* If two_sides is true, first_c2_buzzer is the buzzer index (zero-based)
+       of the leftmost buzzer who is on the right-hand side. All buzzers less
+       than this will be left side, all buzzers greater than or equal to it
+       will be right side. */
+    char first_c2_buzzer;
+
+    /* One of the buzzer noise IDs supported by make_buzzer_noise. */
+    char buzzer_noise;
+
+    /* A bitmask telling us which pages of the option menu NOT to show. */
+    unsigned int opt_page_disable_mask;
+};
+
+/* Rules for the current game (pointer to dynamically allocated memory) */
+static struct game_rules *rules;
+
+const PROGMEM struct game_rules conundrum_rules = {
+    30,   // time_limit_sec
+    0,    // lockout_time_ms
+    5,    // warn_remaining_sec
+    8,    // buzz_length_tenths
+    1,    // clock_counts_up
+    1,    // buzz_stops_clock
+    0,    // allow_rebuzz
+    1,    // show_buzz_time
+    1,    // yellow_generates_target
+    1,    // two_sides
+    2,    // first_c2_buzzer (2): red and green are C1, yellow and blue are C2
+    0,    // buzzer_noise
+    // opt_page_disable_mask
+    CON_OPTIONS_DISABLE_BIT(CON_OPTIONS_INDEX_CLOCK_COUNTS_UP) |
+        CON_OPTIONS_DISABLE_BIT(CON_OPTIONS_INDEX_BUZZ_STOPS_CLOCK) |
+        CON_OPTIONS_DISABLE_BIT(CON_OPTIONS_INDEX_LOCKOUT_TIME)
+};
+
+const PROGMEM struct game_rules basic_buzzer_rules = {
+    0,    // time_limit_sec
+    3000, // lockout_time_ms
+    0,    // warn_remaining_sec
+    8,    // buzz_length_tenths
+    0,    // clock_counts_up
+    0,    // buzz_stops_clock
+    1,    // allow_rebuzz
+    0,    // show_buzz_time
+    0,    // yellow_generates_target
+    0,    // two_sides
+    1,    // first_c2_buzzer
+    0,    // buzzer_noise
+    0,    // opt_page_disable_mask
+};
+
+#define BUZZER_NOISE_DEFAULT 0
+#define BUZZER_NOISE_FANFARE 1
+#define BUZZER_NOISE_RISING 2
+#define BUZZER_NOISE_1UP 3
+#define BUZZER_NOISE_ALL 4
 
 #define NUM_BUZZERS 4
 
@@ -596,6 +628,10 @@ con_time_expired_handler(void *cookie, boz_clock clock) {
 }
 
 static void make_buzzer_noise(int noise, int buzzer) {
+    /* If noise is BUZZER_NOISE_ALL, then give each buzzer a different noise */
+    if (noise == BUZZER_NOISE_ALL)
+        noise = (buzzer & 3);
+
     switch (noise) {
         default:
         case BUZZER_NOISE_DEFAULT:
@@ -861,19 +897,21 @@ con_options_return_callback(void *cookie, int rc) {
         long *con_options_return = omc->results;
 
         rules->time_limit_sec = (int) con_options_return[CON_OPTIONS_INDEX_TIME_LIMIT];
+        rules->clock_counts_up = (unsigned int) con_options_return[CON_OPTIONS_INDEX_CLOCK_COUNTS_UP];
+
         if (state->time_expired || !state->clock_has_started)
             set_up_clock(state);
 
         rules->warn_remaining_sec = (int) con_options_return[CON_OPTIONS_INDEX_WARN_TIME];
+        rules->buzz_stops_clock = (unsigned int) con_options_return[CON_OPTIONS_INDEX_BUZZ_STOPS_CLOCK];
         rules->buzz_length_tenths = (int) (con_options_return[CON_OPTIONS_INDEX_BUZZ_LENGTH] / 100);
         rules->buzzer_noise = (char) con_options_return[CON_OPTIONS_INDEX_BUZZ_NOISE];
-        rules->allow_rebuzz = (char) con_options_return[CON_OPTIONS_INDEX_ALLOW_REBUZZ];
+        rules->allow_rebuzz = (unsigned int) con_options_return[CON_OPTIONS_INDEX_ALLOW_REBUZZ];
 
-        if (!rules->buzz_stops_clock)
-            rules->lockout_time_ms = (int) (con_options_return[CON_OPTIONS_INDEX_LOCKOUT_TIME]);
+        rules->lockout_time_ms = (int) (con_options_return[CON_OPTIONS_INDEX_LOCKOUT_TIME]);
 
-        if (rules->two_sides)
-            rules->first_c2_buzzer = (char) (con_options_return[CON_OPTIONS_INDEX_WHICH_BUZZERS] + 1);
+        rules->first_c2_buzzer = (char) (con_options_return[CON_OPTIONS_INDEX_WHICH_BUZZERS] + 1);
+        rules->two_sides = (rules->first_c2_buzzer < 4);
     }
 
     /* Free the array of options context structure we created for the options
@@ -912,21 +950,19 @@ con_rotary_press(void *cookie) {
     con_options_return = omc->results;
 
     con_options_return[CON_OPTIONS_INDEX_TIME_LIMIT] = rules->time_limit_sec;
+    con_options_return[CON_OPTIONS_INDEX_CLOCK_COUNTS_UP] = rules->clock_counts_up;
     con_options_return[CON_OPTIONS_INDEX_WARN_TIME] = rules->warn_remaining_sec;
+    con_options_return[CON_OPTIONS_INDEX_BUZZ_STOPS_CLOCK] = rules->buzz_stops_clock;
     con_options_return[CON_OPTIONS_INDEX_BUZZ_LENGTH] = rules->buzz_length_tenths * 100;
     con_options_return[CON_OPTIONS_INDEX_BUZZ_NOISE] = rules->buzzer_noise;
     con_options_return[CON_OPTIONS_INDEX_ALLOW_REBUZZ] = rules->allow_rebuzz;
     con_options_return[CON_OPTIONS_INDEX_LOCKOUT_TIME] = (long) rules->lockout_time_ms;
-    con_options_return[CON_OPTIONS_INDEX_WHICH_BUZZERS] = rules->first_c2_buzzer - 1;
-
-    /* Only include the "which buzzers?" question if two_sides is set, and only
-       include the lockout time question if the buzzer doesn't stop the clock.
-     */
-    omc->page_disable_mask = 0;
     if (!rules->two_sides)
-        omc->page_disable_mask |= (1 << CON_OPTIONS_INDEX_WHICH_BUZZERS);
-    if (rules->buzz_stops_clock)
-        omc->page_disable_mask |= (1 << CON_OPTIONS_INDEX_LOCKOUT_TIME);
+        con_options_return[CON_OPTIONS_INDEX_WHICH_BUZZERS] = 3;
+    else
+        con_options_return[CON_OPTIONS_INDEX_WHICH_BUZZERS] = rules->first_c2_buzzer - 1;
+
+    omc->page_disable_mask = rules->opt_page_disable_mask;
 
     omc->num_options = CON_OPTIONS_LENGTH;
 

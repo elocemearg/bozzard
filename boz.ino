@@ -27,7 +27,7 @@ const long BOZ_VERSION = ((BOZ_VERSION_MAJOR << 24) |
 #define APP_CONTEXT_STACK_SIZE 4
 #define NUM_CLOCKS BOZ_NUM_CLOCKS // must be less than the number of bits in an int
 #define BOZ_DYN_ARENA_SIZE 512
-#define BOZ_SOUND_RAMP_LOG // better sound-ramp effect, but +2KB code size
+//#define BOZ_SOUND_RAMP_LOG // better sound-ramp effect, but +2KB code size
 
 #define BOZ_NUM_CHAR_PATTERNS 7
 const PROGMEM byte boz_char_patterns[][8] = {
