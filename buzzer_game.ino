@@ -24,6 +24,9 @@ const PROGMEM char s_bg_buzz_noise_fanfare[] = "Fanfare";
 const PROGMEM char s_bg_buzz_noise_rising[] = "Phantom's End";
 const PROGMEM char s_bg_buzz_noise_1up[] = "1UP";
 const PROGMEM char s_bg_buzz_noise_all[] = "All different";
+const PROGMEM char s_bg_time_up_noise[] = "Time up noise";
+const PROGMEM char s_bg_time_up_noise_brrp_brrp[] = "Brrp brrp";
+const PROGMEM char s_bg_time_up_noise_beep_4[] = "Beep x4";
 
 const PROGMEM char s_bg_ready[] = BOZ_CHAR_PLAY_S " to start";
 const PROGMEM char s_bg_time[] = "TIME UP  " BOZ_CHAR_RESET_S " reset";
@@ -49,6 +52,10 @@ const PROGMEM char * const s_bg_buzz_noise_names[] = {
     s_bg_buzz_noise_1up,
     s_bg_buzz_noise_all
 };
+const PROGMEM char * const s_bg_time_up_noise_names[] = {
+    s_bg_time_up_noise_brrp_brrp,
+    s_bg_time_up_noise_beep_4,
+};
 
 #define BG_OPTIONS_DISABLE_BIT(X) (1 << (X))
 
@@ -58,11 +65,12 @@ const PROGMEM char * const s_bg_buzz_noise_names[] = {
 #define BG_OPTIONS_INDEX_BUZZ_STOPS_CLOCK 3
 #define BG_OPTIONS_INDEX_BUZZ_LENGTH      4
 #define BG_OPTIONS_INDEX_BUZZ_NOISE       5
-#define BG_OPTIONS_INDEX_ALLOW_REBUZZ     6
-#define BG_OPTIONS_INDEX_LOCKOUT_TIME     7
-#define BG_OPTIONS_INDEX_WHICH_BUZZERS    8
+#define BG_OPTIONS_INDEX_TIME_UP_NOISE    6
+#define BG_OPTIONS_INDEX_ALLOW_REBUZZ     7
+#define BG_OPTIONS_INDEX_LOCKOUT_TIME     8
+#define BG_OPTIONS_INDEX_WHICH_BUZZERS    9
 
-#define BG_OPTIONS_LENGTH                 9
+#define BG_OPTIONS_LENGTH                10
 
 const PROGMEM struct option_page buzzer_game_options[] = {
     {
@@ -124,6 +132,16 @@ const PROGMEM struct option_page buzzer_game_options[] = {
         NULL,
         s_bg_buzz_noise_names,
         sizeof(s_bg_buzz_noise_names) / sizeof(s_bg_buzz_noise_names[0])
+    },
+    {
+        s_bg_time_up_noise,
+        OPTION_TYPE_LIST,
+        0,
+        0,
+        1,
+        NULL,
+        s_bg_time_up_noise_names,
+        sizeof(s_bg_time_up_noise_names) / sizeof(s_bg_time_up_noise_names[0])
     },
     {
         s_bg_allow_rebuzz,
@@ -253,6 +271,9 @@ struct game_rules {
     /* One of the buzzer noise IDs supported by make_buzzer_noise. */
     char buzzer_noise;
 
+    /* One of the time-up noise IDs supported by make_time_up_noise. */
+    char time_up_noise;
+
     /* A bitmask telling us which pages of the option menu NOT to show. */
     unsigned int opt_page_disable_mask;
 };
@@ -273,6 +294,7 @@ const PROGMEM struct game_rules conundrum_rules = {
     1,    // two_sides
     2,    // first_c2_buzzer (2): red and green are C1, yellow and blue are C2
     0,    // buzzer_noise
+    0,    // time_up_noise
     // opt_page_disable_mask
     BG_OPTIONS_DISABLE_BIT(BG_OPTIONS_INDEX_CLOCK_COUNTS_UP) |
         BG_OPTIONS_DISABLE_BIT(BG_OPTIONS_INDEX_BUZZ_STOPS_CLOCK) |
@@ -292,6 +314,7 @@ const PROGMEM struct game_rules basic_buzzer_rules = {
     0,    // two_sides
     1,    // first_c2_buzzer
     0,    // buzzer_noise
+    0,    // time_up_noise
     0,    // opt_page_disable_mask
 };
 
@@ -300,6 +323,9 @@ const PROGMEM struct game_rules basic_buzzer_rules = {
 #define BUZZER_NOISE_RISING 2
 #define BUZZER_NOISE_1UP 3
 #define BUZZER_NOISE_ALL 4
+
+#define TIME_UP_NOISE_BRRP_BRRP 0
+#define TIME_UP_NOISE_BEEP_4    1
 
 #define NUM_BUZZERS 4
 
@@ -592,7 +618,7 @@ bg_alarm_handler(void *cookie, boz_clock clock) {
             boz_leds_set(0);
 
             // Sound a... drumbeat?
-            boz_sound_note(NOTE_G3, 10);
+            boz_sound_note(NOTE_G3, 5);
             //boz_sound_arpeggio(warning_sound, 4, 50, 1);
 
             state->most_recent_warning_remain_sec = sec_left;
@@ -612,22 +638,22 @@ bg_alarm_handler(void *cookie, boz_clock clock) {
         boz_clock_set_alarm(clock, ((ms - 1) / 200) * 200, bg_alarm_handler);
 }
 
-void
-bg_time_expired_handler(void *cookie, boz_clock clock) {
-    struct buzzer_game_state *state = (struct buzzer_game_state *) cookie;
-    byte time_up_arp[] = { NOTE_C2, 0, NOTE_C2, 0 };
+static void make_time_up_noise(char noise) {
+    byte brrp_brrp_arp[] = { NOTE_C2, 0 };
+    byte beep_4_arp[] = { NOTE_G5, 0 };
 
-    boz_clock_stop(clock);
-    boz_clock_cancel_alarm(state->clock);
-    state->time_expired = 1;
-    state->time_expired_at_millis = millis();
+    switch (noise) {
+        default:
+        case TIME_UP_NOISE_BRRP_BRRP:
+            boz_sound_arpeggio(brrp_brrp_arp, 2, 333, 2);
+            break;
 
-    boz_sound_stop_all();
-    boz_sound_arpeggio(time_up_arp, 3, 500, 1);
-    //boz_sound_note(NOTE_C5, 500);
-
-    redraw_display(state);
+        case TIME_UP_NOISE_BEEP_4:
+            boz_sound_arpeggio(beep_4_arp, 2, 333, 4);
+            break;
+    }
 }
+
 
 static void make_buzzer_noise(int noise, int buzzer) {
     /* If noise is BUZZER_NOISE_ALL, then give each buzzer a different noise */
@@ -641,7 +667,9 @@ static void make_buzzer_noise(int noise, int buzzer) {
             break;
 
         case BUZZER_NOISE_FANFARE: {
-            const int beat_ms = 120;
+            /* This is about one and a half times the length specified in
+               rules->buzz_length_tenths, but nobody will notice */
+            int beat_ms = rules->buzz_length_tenths * 15;
             byte notes[] = { NOTE_C5, NOTE_F5, NOTE_A5, NOTE_C6, 0, NOTE_A5, NOTE_C6 };
             byte beats[] = { 1, 1, 1, 1, 1, 1, 4 };
 
@@ -667,6 +695,21 @@ static void make_buzzer_noise(int noise, int buzzer) {
         }
         break;
     }
+}
+
+void
+bg_time_expired_handler(void *cookie, boz_clock clock) {
+    struct buzzer_game_state *state = (struct buzzer_game_state *) cookie;
+
+    boz_clock_stop(clock);
+    boz_clock_cancel_alarm(state->clock);
+    state->time_expired = 1;
+    state->time_expired_at_millis = millis();
+
+    boz_sound_stop_all();
+    make_time_up_noise(rules->time_up_noise);
+
+    redraw_display(state);
 }
 
 static void bg_unlock_buzzers(void *statev) {
@@ -908,6 +951,7 @@ bg_options_return_callback(void *cookie, int rc) {
         rules->buzz_stops_clock = (unsigned int) bg_options_return[BG_OPTIONS_INDEX_BUZZ_STOPS_CLOCK];
         rules->buzz_length_tenths = (int) (bg_options_return[BG_OPTIONS_INDEX_BUZZ_LENGTH] / 100);
         rules->buzzer_noise = (char) bg_options_return[BG_OPTIONS_INDEX_BUZZ_NOISE];
+        rules->time_up_noise = (char) bg_options_return[BG_OPTIONS_INDEX_TIME_UP_NOISE];
         rules->allow_rebuzz = (unsigned int) bg_options_return[BG_OPTIONS_INDEX_ALLOW_REBUZZ];
 
         rules->lockout_time_ms = (int) (bg_options_return[BG_OPTIONS_INDEX_LOCKOUT_TIME]);
@@ -957,6 +1001,7 @@ bg_rotary_press(void *cookie) {
     bg_options_return[BG_OPTIONS_INDEX_BUZZ_STOPS_CLOCK] = rules->buzz_stops_clock;
     bg_options_return[BG_OPTIONS_INDEX_BUZZ_LENGTH] = rules->buzz_length_tenths * 100;
     bg_options_return[BG_OPTIONS_INDEX_BUZZ_NOISE] = rules->buzzer_noise;
+    bg_options_return[BG_OPTIONS_INDEX_TIME_UP_NOISE] = rules->time_up_noise;
     bg_options_return[BG_OPTIONS_INDEX_ALLOW_REBUZZ] = rules->allow_rebuzz;
     bg_options_return[BG_OPTIONS_INDEX_LOCKOUT_TIME] = (long) rules->lockout_time_ms;
     if (!rules->two_sides)
