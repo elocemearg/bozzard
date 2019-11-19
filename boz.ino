@@ -176,13 +176,13 @@ struct button_state buttons[] = {
     { PIN_QM_YELLOW, FUNC_YELLOW, 0, BUTTON_PRESS_THRESHOLD_US, BUTTON_RELEASE_THRESHOLD_US, 0, 0, 0, 0, 1 },
     { PIN_QM_RESET,  FUNC_RESET,  0, BUTTON_PRESS_THRESHOLD_US, BUTTON_RELEASE_THRESHOLD_US, 0, 0, 0, 0, 1 },
     { PIN_QM_RE_KEY, FUNC_RE_KEY, 0, BUTTON_PRESS_THRESHOLD_US, BUTTON_RELEASE_THRESHOLD_US, 0, 0, 0, 0, 1 },
-    { PIN_QM_RE_CLOCK, FUNC_RE_CLOCK, 0, ROTARY_CLOCK_PRESS_THRESHOLD_US, ROTARY_CLOCK_RELEASE_THRESHOLD_US, 0, 0, 0, 0, 1 },
+    { PIN_QM_RE_CLOCK, FUNC_RE_CLOCK, 0, ROTARY_CLOCK_PRESS_THRESHOLD_US, ROTARY_CLOCK_RELEASE_THRESHOLD_US, 0, 0, 0, 0, 0 },
 };
 const int num_buttons = sizeof(buttons) / sizeof(buttons[0]);
 #define BOZ_FIRST_BUZZER_BUTTON_INDEX 0
 #define BOZ_LAST_BUZZER_BUTTON_INDEX 3
 
-int re_data_value_last_clock = HIGH;
+int re_data_value_last_clock = LOW;
 unsigned long re_last_turn_high_ms = 0;
 unsigned long re_last_turn_low_ms = 0;
 
@@ -1023,7 +1023,7 @@ void loop() {
                        can consider it an actual press. */
                     if (button->button_function == FUNC_RE_CLOCK) {
                         unsigned long *last_turn_ms;
-                        /* We've seen a falling edge of the rotary encoder's
+                        /* We've seen a rising edge of the rotary encoder's
                            clock pin. Provided this is at least
                            ROTARY_TURN_MIN_GAP_MS after the last time we
                            decided the rotary encoder had been turned the same
@@ -1038,7 +1038,7 @@ void loop() {
 
                         if (time_elapsed(*last_turn_ms, ms) >= ROTARY_TURN_MIN_GAP_MS) {
                             if (app_context->event_qm_rotary) {
-                                app_context->event_qm_rotary(app_context->event_cookie, re_data_value_last_clock == HIGH);
+                                app_context->event_qm_rotary(app_context->event_cookie, re_data_value_last_clock == LOW);
                             }
                             *last_turn_ms = ms;
                         }
@@ -1316,7 +1316,7 @@ void loop() {
             /* We want interrupts when any button is pressed (pin D2 is low) or
                the rotary knob is turned (pin D3 falls) */
             attachInterrupt(digitalPinToInterrupt(PIN_BUTTON_INT), button_int_handler, LOW);
-            attachInterrupt(digitalPinToInterrupt(PIN_QM_RE_CLOCK), rotary_clock_int_handler, FALLING);
+            attachInterrupt(digitalPinToInterrupt(PIN_QM_RE_CLOCK), rotary_clock_int_handler, RISING);
 
             /* If we get an interrupt between enabling interrupts and calling
                sleep_cpu(), the interrupt handler will have disabled sleep mode,
