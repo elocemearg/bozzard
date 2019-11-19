@@ -42,24 +42,24 @@ struct option_page {
 
 struct option_menu_context {
     /* Pointer to program memory, containing information on each option page. */
-    const struct option_page *options;
+    const struct option_page *pages;
 
-    /* The number of option pages in "options". */
-    int num_options;
+    /* The number of option pages in "pages". */
+    int num_pages;
 
     /* If page_disable_mask is 0, all pages in "options" are enabled. If not,
      * then if the bit representing (1 << page) is set, then that page will be
      * skipped over and its value in "results" will be unchanged. */
     unsigned int page_disable_mask;
 
-    /* Must point to an array of num_options longs */
+    /* Must point to an array of num_pages longs */
     long *results;
 
     /* If true, the control on the page will already be selected, and when
      * OK is pressed, or we navigate through all the controls on the page,
      * the options app will return immediately. Only the first element of
      * options will be shown, so it's only useful to have one element
-     * (and num_options should be 1). */
+     * (and num_pages should be 1). */
     int one_shot;
 };
 

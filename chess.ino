@@ -366,8 +366,8 @@ chess_init_callback(void *cookie, int rc) {
 static void start_preset_menu() {
     struct option_menu_context *omc = (struct option_menu_context *) boz_mm_alloc(sizeof(struct option_menu_context));
     chess_state->preset_menu_context = omc;
-    omc->options = preset_menu;
-    omc->num_options = 1;
+    omc->pages = preset_menu;
+    omc->num_pages = 1;
     omc->results = (long *) boz_mm_alloc(sizeof(long));
     omc->results[0] = 0;
     omc->one_shot = 1;
@@ -796,8 +796,8 @@ chess_rotary_press(void *cookie) {
         struct option_menu_context *omc = (struct option_menu_context *) boz_mm_alloc(sizeof(struct option_menu_context));
 
         state->clock_settings_menu_context = omc;
-        omc->options = clock_settings_menu;
-        omc->num_options = CLOCK_SETTINGS_LENGTH;
+        omc->pages = clock_settings_menu;
+        omc->num_pages = CLOCK_SETTINGS_LENGTH;
         omc->results = (long *) boz_mm_alloc(sizeof(long) * CLOCK_SETTINGS_LENGTH);
         omc->one_shot = 0;
         omc->page_disable_mask = 0;

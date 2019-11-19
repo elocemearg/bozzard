@@ -130,7 +130,7 @@ option_menu_init(void *cookie) {
     while (context->page_disable_mask & (1 << first_page)) {
         ++first_page;
     }
-    if (first_page >= context->num_options) {
+    if (first_page >= context->num_pages) {
         /* No enabled pages? */
         boz_app_exit(1);
     }
@@ -206,14 +206,14 @@ om_rotary_turn(void *cookie, int clockwise) {
 
         /* Find next enabled page in the direction we've been given. */
         for (next_page = options_state->page_number + direction;
-                next_page >= 0 && next_page <= context->num_options &&
+                next_page >= 0 && next_page <= context->num_pages &&
                     (context->page_disable_mask & (1 << next_page));
                     next_page += direction);
 
-        /* We allow page_number to equal context->num_options - this means
+        /* We allow page_number to equal context->num_pages - this means
            we display a "Play to save, Reset to discard" banner. Otherwise,
            if the next page we've chosen is not a valid page, do nothing. */
-        if (next_page >= 0 && next_page <= context->num_options) {
+        if (next_page >= 0 && next_page <= context->num_pages) {
             om_load_page(context, next_page);
             om_redraw_display(context);
         }
@@ -261,7 +261,7 @@ int
 om_num_controls_on_page(struct option_menu_context *context) {
     int num_controls = 0;
 
-    if (options_state->page_number < 0 || options_state->page_number >= context->num_options)
+    if (options_state->page_number < 0 || options_state->page_number >= context->num_pages)
         return 0;
 
     switch (options_state->current_page.type & OPTION_MAIN_TYPE_MASK) {
@@ -280,8 +280,8 @@ om_num_controls_on_page(struct option_menu_context *context) {
 
 void
 om_load_page(struct option_menu_context *context, int new_page_number) {
-    if (new_page_number >= 0 && new_page_number < context->num_options) {
-        memcpy_P(&options_state->current_page, &context->options[new_page_number], sizeof(options_state->current_page));
+    if (new_page_number >= 0 && new_page_number < context->num_pages) {
+        memcpy_P(&options_state->current_page, &context->pages[new_page_number], sizeof(options_state->current_page));
     }
     options_state->page_number = new_page_number;
 }
@@ -292,7 +292,7 @@ om_adjust_control(struct option_menu_context *context, int direction) {
     long old_value, new_value;
     struct option_page *current_page = &options_state->current_page;
 
-    if (options_state->page_number >= context->num_options)
+    if (options_state->page_number >= context->num_pages)
         return;
 
     old_value = context->results[options_state->page_number];
@@ -402,7 +402,7 @@ void
 om_redraw_display(struct option_menu_context *context) {
     boz_display_clear();
 
-    if (options_state->page_number >= context->num_options) {
+    if (options_state->page_number >= context->num_pages) {
         boz_display_write_string_P(s_accept);
         boz_display_set_cursor(1, 0);
         boz_display_write_string_P(s_discard);
