@@ -4,7 +4,7 @@
 extern void main_menu_init(void *);
 extern void conundrum_init(void *);
 extern void test_init(void *);
-extern void buzzer_round_init(void *);
+extern void buzzer_game_init(void *);
 extern void chess_init(void *);
 extern void option_menu_init(void *);
 extern void music_loop_init(void *);
@@ -20,7 +20,7 @@ enum BOZ_APP_ID {
     BOZ_APP_ID_MAIN_MENU = 0,
     BOZ_APP_ID_PC_CONTROL,
     BOZ_APP_ID_CONUNDRUM,
-    BOZ_APP_ID_BUZZER_ROUND,
+    BOZ_APP_ID_BUZZER_GAME,
     BOZ_APP_ID_CHESS_CLOCKS,
     BOZ_APP_ID_BACKLIGHT,
     BOZ_APP_ID_BATTERY,

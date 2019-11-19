@@ -13,7 +13,7 @@ const PROGMEM struct boz_app app_list[] = {
     { BOZ_APP_ID_PC_CONTROL, "PC control", pcc_init, BOZ_APP_MAIN | BOZ_APP_NO_SLEEP },
 #else
     { BOZ_APP_ID_CONUNDRUM, "Conundrum", conundrum_init, BOZ_APP_MAIN },
-    { BOZ_APP_ID_BUZZER_ROUND, "Buzzer round", buzzer_round_init, BOZ_APP_MAIN },
+    { BOZ_APP_ID_BUZZER_GAME, "Buzzer game", buzzer_game_init, BOZ_APP_MAIN },
     { BOZ_APP_ID_CHESS_CLOCKS, "Chess clocks", chess_init, BOZ_APP_MAIN },
 #endif
 
