@@ -15,8 +15,8 @@ const PROGMEM char s_bg_warn_remaining[] = "Warn remaining";
 const PROGMEM char s_bg_buzz_stops_clock[] = "Buzz stops clock";
 const PROGMEM char s_bg_which_buzzers[] = "Which buzzers?";
 const PROGMEM char s_bg_allow_rebuzz[] = "Allow re-buzz";
-const PROGMEM char s_bg_lockout_time[] = "Lockout (ms)";
-const PROGMEM char s_bg_lockout_null[] = "Until yellow btn";
+const PROGMEM char s_bg_lockout_time[] = "Unlock after(ms)";
+const PROGMEM char s_bg_lockout_null[] = "Yellow button";
 const PROGMEM char s_bg_buzz_length_ms[] = "Buzz length (ms)";
 const PROGMEM char s_bg_buzz_noise[] = "Buzzer noise";
 const PROGMEM char s_bg_buzz_noise_default[] = "Square Bell";
@@ -63,11 +63,11 @@ const PROGMEM char * const s_bg_time_up_noise_names[] = {
 #define BG_OPTIONS_INDEX_CLOCK_COUNTS_UP  1
 #define BG_OPTIONS_INDEX_WARN_TIME        2
 #define BG_OPTIONS_INDEX_BUZZ_STOPS_CLOCK 3
-#define BG_OPTIONS_INDEX_BUZZ_LENGTH      4
-#define BG_OPTIONS_INDEX_BUZZ_NOISE       5
-#define BG_OPTIONS_INDEX_TIME_UP_NOISE    6
-#define BG_OPTIONS_INDEX_ALLOW_REBUZZ     7
-#define BG_OPTIONS_INDEX_LOCKOUT_TIME     8
+#define BG_OPTIONS_INDEX_LOCKOUT_TIME     4
+#define BG_OPTIONS_INDEX_ALLOW_REBUZZ     5
+#define BG_OPTIONS_INDEX_BUZZ_LENGTH      6
+#define BG_OPTIONS_INDEX_BUZZ_NOISE       7
+#define BG_OPTIONS_INDEX_TIME_UP_NOISE    8
 #define BG_OPTIONS_INDEX_WHICH_BUZZERS    9
 
 #define BG_OPTIONS_LENGTH                10
@@ -114,6 +114,26 @@ const PROGMEM struct option_page buzzer_game_options[] = {
         0
     },
     {
+        s_bg_lockout_time,
+        OPTION_TYPE_NUMBER,
+        250,
+        10000L,
+        250,
+        s_bg_lockout_null,
+        NULL,
+        0
+    },
+    {
+        s_bg_allow_rebuzz,
+        OPTION_TYPE_YES_NO,
+        0,
+        0,
+        1,
+        NULL,
+        NULL,
+        0
+    },
+    {
         s_bg_buzz_length_ms,
         OPTION_TYPE_NUMBER,
         0,
@@ -142,26 +162,6 @@ const PROGMEM struct option_page buzzer_game_options[] = {
         NULL,
         s_bg_time_up_noise_names,
         sizeof(s_bg_time_up_noise_names) / sizeof(s_bg_time_up_noise_names[0])
-    },
-    {
-        s_bg_allow_rebuzz,
-        OPTION_TYPE_YES_NO,
-        0,
-        0,
-        1,
-        NULL,
-        NULL,
-        0
-    },
-    {
-        s_bg_lockout_time,
-        OPTION_TYPE_NUMBER,
-        250,
-        10000L,
-        250,
-        s_bg_lockout_null,
-        NULL,
-        0
     },
     {
         s_bg_which_buzzers,

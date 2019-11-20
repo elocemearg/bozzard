@@ -462,6 +462,13 @@ om_display_write_centre(const char *str, int max_len) {
         boz_display_write_char(' ');
 }
 
+static void bracket_bottom_row() {
+    boz_display_set_cursor(1, 0);
+    boz_display_write_char('[');
+    boz_display_set_cursor(1, 15);
+    boz_display_write_char(']');
+}
+
 void
 om_redraw_option_value(struct option_menu_context *context) {
     char str[17];
@@ -485,8 +492,12 @@ om_redraw_option_value(struct option_menu_context *context) {
         case OPTION_TYPE_NUMBER:
             if (value < current_page->min_value) {
                 strncpy_P(str, current_page->null_value, sizeof(str));
-                str[16] = '\0';
-                om_display_write_centre(str, 16);
+                str[15] = '\0';
+                boz_display_set_cursor(1, 1);
+                om_display_write_centre(str, 15);
+                if (options_state->control_depth > 0) {
+                    bracket_bottom_row();
+                }
                 col = 16;
             }
             else {
@@ -512,10 +523,7 @@ om_redraw_option_value(struct option_menu_context *context) {
             if (options_state->control_depth > 0) {
                 /* Put brackets round it if it is selected, that is, if
                    turning the knob will change the value */
-                boz_display_set_cursor(1, 0);
-                boz_display_write_char('[');
-                boz_display_set_cursor(1, 15);
-                boz_display_write_char(']');
+                bracket_bottom_row();
             }
             col = 16;
             break;
