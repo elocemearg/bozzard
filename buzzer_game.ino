@@ -175,7 +175,14 @@ const PROGMEM struct option_page buzzer_game_options[] = {
     },
 };
 
+#define GAME_RULES_MAGIC 'R'
+
 struct game_rules {
+    /* Magic byte 'R' indicating this is a rules struct. If there's no rules
+       struct in this position in EEPROM, because the EEPROM has been erased,
+       this will be 0xff and the rest of the struct isn't valid. */
+    byte magic;
+
     /* time_limit_sec
        The time limit for the game. This is in seconds. If the time limit is 0,
        then the clock has no limit and always counts up, regardless of what
@@ -282,6 +289,7 @@ struct game_rules {
 static struct game_rules *rules;
 
 const PROGMEM struct game_rules conundrum_rules = {
+    GAME_RULES_MAGIC,
     30,   // time_limit_sec
     0,    // lockout_time_ms
     5,    // warn_remaining_sec
@@ -302,6 +310,7 @@ const PROGMEM struct game_rules conundrum_rules = {
 };
 
 const PROGMEM struct game_rules basic_buzzer_rules = {
+    GAME_RULES_MAGIC,
     0,    // time_limit_sec
     3000, // lockout_time_ms
     0,    // warn_remaining_sec
@@ -933,6 +942,8 @@ bg_options_return_callback(void *cookie, int rc) {
     struct buzzer_game_state *state = (struct buzzer_game_state *) cookie;
     struct option_menu_context *omc = state->bg_options_context;
     if (rc == 0) {
+        /* User accepted changes */
+
         if (omc == NULL) {
             /* bg_options_context was never allocated before we called the
                options menu app? */
@@ -958,6 +969,11 @@ bg_options_return_callback(void *cookie, int rc) {
 
         rules->first_c2_buzzer = (char) (bg_options_return[BG_OPTIONS_INDEX_WHICH_BUZZERS] + 1);
         rules->two_sides = (rules->first_c2_buzzer < 4);
+        rules->magic = GAME_RULES_MAGIC;
+
+        /* Write the new rules out to this app's EEPROM region */
+        boz_eeprom_write(0, rules, sizeof(*rules)); 
+
     }
 
     /* Free the array of options context structure we created for the options
@@ -1050,7 +1066,15 @@ buzzer_game_general_init(const struct game_rules *rules_progmem) {
     rules = (struct game_rules *) boz_mm_alloc(sizeof(*rules));
     bg_state = (struct buzzer_game_state *) boz_mm_alloc(sizeof(*bg_state));
 
-    memcpy_P(rules, rules_progmem, sizeof(*rules));
+    /* If this app has a big enough EEPROM region, try to read the rules
+       out of it. If we don't have a big enough EEPROM region, or we
+       couldn't read the rules, or the tag byte at the start of the rules
+       wasn't valid, use the defaults supplied. */
+    if (boz_eeprom_get_region_size() < sizeof(*rules) ||
+            boz_eeprom_read(0, rules, sizeof(*rules)) ||
+            rules->magic != GAME_RULES_MAGIC) {
+        memcpy_P(rules, rules_progmem, sizeof(*rules));
+    }
 
     bg_state->clock = boz_clock_create(0, 1);
 

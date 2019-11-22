@@ -763,6 +763,88 @@ boz_cancel_alarm();
 
 
 /******************************************************************************
+ * NON-VOLATILE STORAGE (EEPROM)
+ *
+ * Each app has a region of EEPROM reserved for it. The app list contains,
+ * for each application, the offset within EEPROM where that app's region
+ * starts, and how large that region is in bytes.
+ *
+ * On the Arduino Nano, valid EEPROM locations are 0x0 to 0x3ff inclusive,
+ * which is 1024 bytes.
+ * 
+ * An app may call boz_eeprom_write() and boz_eeprom_read() to write to and
+ * read from EEPROM. These calls will write to and read from the current app's
+ * own EEPROM region only.
+ * 
+ * At any point, an app may assume that its own EEPROM region contains EITHER:
+ *     (a) data the app has previously written to that region, or
+ *     (b) all 0xff.
+ * 
+ *****************************************************************************/
+
+/* boz_eeprom_get_region_size
+ * Return the size of the currently-running app's reserved EEPROM region,
+ * in bytes. The return value may be zero, which means the app doesn't have an
+ * EEPROM region.
+ */
+unsigned int boz_eeprom_get_region_size();
+
+/* boz_eeprom_write
+ * Write the "length" bytes pointed to by "data" to the EEPROM, starting
+ * "eeprom_region_offset" bytes from the start of the app's own EEPROM region.
+ *
+ *     eeprom_region_offset: the offset within the app's EEPROM region.
+ *     data: a pointer to the data to write.
+ *     length: the number of bytes to write.
+ *
+ * returns: 0 on success, <0 on failure.
+ *
+ * This function fails, and writes nothing, if eeprom_region_offset is greater
+ * than the size of the app's own EEPROM region, or if eeprom_region_offset +
+ * size is greater than the size of the app's own EEPROM region. In other
+ * words, an app is only allowed to write to its own EEPROM region and not
+ * anywhere else.
+ *
+ * This function uses EEPROM.update, which only actually writes a byte to an
+ * EEPROM location if the current value of that byte is different.
+ *
+ * It takes about 3.3ms to write a single EEPROM location (if its value needs
+ * to change) so this call may block for a significant amount of time. This may
+ * cause events to be missed.
+ */
+int boz_eeprom_write(unsigned int eeprom_region_offset, const void *data, unsigned int length);
+
+/* boz_eeprom_read
+ * Read "length" bytes from the app's own EEPROM region, starting
+ * "eeprom_region_offset" bytes from the start of that region, and put the
+ * data in the buffer pointed to by "dest".
+ *
+ *     eeprom_region_offset: the offset within the app's EEPROM region.
+ *     dest: where to copy the data to.
+ *     length: the number of bytes to read.
+ *
+ * returns: 0 on success, <0 on failure.
+ *
+ * This function fails if eeprom_region_offset is greater than the app's own
+ * EEPROM region size, or if eeprom_region_offset + length is greater than the
+ * app's own EEPROM region size. In other words, the app is only allowed to
+ * read from its own EEPROM region.  In this case the contents of "data" are
+ * undefined.
+ */
+int boz_eeprom_read(unsigned int eeprom_region_offset, void *dest, unsigned int length);
+
+/* boz_eeprom_global_reset
+   Write over the entire EEPROM, filling it with the byte '\xFF', except for
+   a region at the beginning (currently 12 bytes) where a special header is
+   written.
+   Note this resets the entire EEPROM, not just the region belonging to the
+   currently-running application.
+   Return 0 on success and <0 on failure. */
+int boz_eeprom_global_reset();
+
+
+
+/******************************************************************************
  * MISCELLANEOUS
  *****************************************************************************/
 

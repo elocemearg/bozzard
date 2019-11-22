@@ -16,6 +16,8 @@ struct boz_app {
     char name[16];
     void (*init)(void *);
     unsigned int flags;
+    unsigned int eeprom_start;
+    unsigned int eeprom_length;
 };
 
 struct app_context {
@@ -32,6 +34,11 @@ struct app_context {
 
     /* If true, the MCU will not be put to sleep while this app is running. */
     char forbid_sleep;
+
+    /* Position of this app's reserved region in the EEPROM, and its length
+     * in bytes. If the length is zero, this app doesn't have a region of
+     * EEPROM. */
+    unsigned int eeprom_start, eeprom_length;
 
     /* Opaque pointer passed to all the event_* handlers that handle
      * button presses. */

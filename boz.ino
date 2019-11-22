@@ -9,6 +9,7 @@
 
 #include <avr/pgmspace.h>
 #include <avr/sleep.h>
+#include <EEPROM.h>
 
 #include "boz_app_inits.h"
 
@@ -21,6 +22,16 @@ const long BOZ_VERSION = ((BOZ_VERSION_MAJOR << 24) |
             (BOZ_VERSION_MINOR << 16) |
             (BOZ_VERSION_RELEASE << 8));
 
+/* If the start of EEPROM doesn't contain this when we turn the unit on, we'll
+   write it there and fill the rest of EEPROM with 0xff to initialise it. */
+struct boz_eeprom_header {
+    char id[8];
+    long version;
+};
+const PROGMEM struct boz_eeprom_header boz_eeprom_header = {
+    "BOZZARD",
+    BOZ_VERSION
+};
 
 #define SND_CMD_QUEUE_SIZE 16
 #define DISP_CMD_QUEUE_SIZE 96
@@ -486,6 +497,77 @@ boz_get_battery_voltage(void) {
     return (int) ((10000L * value) / 1023L);
 }
 
+unsigned int
+boz_eeprom_get_region_size() {
+    if (app_context) {
+        return app_context->eeprom_length;
+    }
+    else {
+        return 0;
+    }
+}
+
+static int check_eeprom_pos(unsigned int app_offset, unsigned int length) {
+    if (app_context == NULL)
+        return -1;
+    if (app_offset + length > app_context->eeprom_length)
+        return -1;
+    return 0;
+}
+
+int
+boz_eeprom_write(unsigned int app_offset, const void *datav, unsigned int length) {
+    int eeprom_pos;
+    const byte *data = (const byte *) datav;
+
+    if (check_eeprom_pos(app_offset, length))
+        return -1;
+
+    eeprom_pos = (int) (app_context->eeprom_start + app_offset);
+
+    for (unsigned int i = 0; i < length; ++i) {
+        EEPROM.update(eeprom_pos, *data);
+        ++eeprom_pos;
+        ++data;
+    }
+
+    return 0;
+}
+
+int
+boz_eeprom_read(unsigned int app_offset, void *destv, unsigned int length) {
+    int eeprom_pos;
+    byte *dest = (byte *) destv;
+
+    if (check_eeprom_pos(app_offset, length))
+        return -1;
+
+    eeprom_pos = (int) (app_context->eeprom_start + app_offset);
+    for (unsigned int i = 0; i < length; ++i) {
+        *dest = EEPROM.read(eeprom_pos);
+        ++eeprom_pos;
+        ++dest;
+    }
+
+    return 0;
+}
+
+int
+boz_eeprom_global_reset() {
+    int eeprom_length = EEPROM.length();
+    for (int i = 0; i < eeprom_length; ++i) {
+        /* Put our magic identifier header at the start of the EEPROM, and
+           fill the rest of it with 0xff. */
+        if (i < (int) sizeof(boz_eeprom_header)) {
+            EEPROM.update(i, pgm_read_byte_near(((byte *) &boz_eeprom_header) + i));
+        }
+        else {
+            EEPROM.update(i, 0xff);
+        }
+    }
+    return 0;
+}
+
 void
 app_context_tear_down(struct app_context *ac) {
     for (int i = 0; i < NUM_CLOCKS; ++i) {
@@ -838,6 +920,27 @@ void setup() {
     for (int i = 0; i < NUM_CLOCKS; ++i) {
         clocks[i] = NULL;
     }
+
+    /* Check the header at the start of EEPROM - if it isn't what we expect,
+       or if the version number has changed, do a full EEPROM reset. */
+    struct boz_eeprom_header seen_header, correct_header;
+    int reset_eeprom = 0;
+    for (int i = 0; i < (int) sizeof(seen_header); ++i) {
+        ((byte *) &seen_header)[i] = EEPROM.read(i);
+    }
+    memcpy_P(&correct_header, &boz_eeprom_header, sizeof(correct_header));
+
+    if (strcmp(correct_header.id, seen_header.id))
+        reset_eeprom = 1;
+    else if (correct_header.version != seen_header.version)
+        reset_eeprom = 1;
+
+    if (reset_eeprom) {
+        /* EEPROM contains unrecognised header, so reinitialise the whole lot */
+        boz_leds_set(15);
+        boz_eeprom_global_reset();
+        boz_leds_set(0);
+    }
 }
 
 void loop() {
@@ -1149,9 +1252,15 @@ void loop() {
            new app context */
         boz_mm_push_context();
 
+        /* Set forbid_sleep if necessary */
         if (app_call_defer->flags & BOZ_APP_NO_SLEEP) {
             app_context->forbid_sleep = 1;
         }
+
+        /* Copy the details of this app's reserved EEPROM region, if any,
+           from the struct boz_app into app_context */
+        app_context->eeprom_start = app_call_defer->eeprom_start;
+        app_context->eeprom_length = app_call_defer->eeprom_length;
 
         app_call_defer = NULL;
 
