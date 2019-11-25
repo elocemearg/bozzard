@@ -185,20 +185,11 @@ const PROGMEM struct option_page clock_settings_menu[] = {
     }
 };
 
-//long clock_settings_results[4];
 #define CLOCK_SETTINGS_INITIAL_TIME 0
 #define CLOCK_SETTINGS_INCREMENT_MODE 1
 #define CLOCK_SETTINGS_INCREMENT_TIME 2
 #define CLOCK_SETTINGS_ALLOW_NEGATIVE 3
 #define CLOCK_SETTINGS_LENGTH 4
-
-/*struct option_menu_context clock_settings_menu_context = {
-    clock_settings_menu,
-    sizeof(clock_settings_menu) / sizeof(clock_settings_menu[0]),
-    clock_settings_results,
-    0
-};*/
-
 
 struct chess_clock_format {
     long abs_value_min;

@@ -51,6 +51,8 @@ const PROGMEM byte boz_char_patterns[][8] = {
     { 0x18, 0x05, 0x03, 0x07, 0x00, 0x00, 0x00, 0x00 }, // 6: clockwise wheel
 };
 
+/* A single sound command, which is put on the sound queue by an app, and is
+   serviced by the main loop. */
 struct snd_cmd {
     union {
         struct {
@@ -75,6 +77,8 @@ struct snd_cmd {
     unsigned int arp_notes_max_index : 2;
 };
 
+/* A single display command, which is put on the display command queue by an
+   app, and is serviced by the main loop. */
 struct disp_cmd {
     unsigned short cmd;
 };
@@ -147,9 +151,14 @@ struct button_state {
     unsigned int active_low : 1;
 };
 
+/* The sound and display commands queue. */
 struct snd_cmd_queue snd_cmd_queue;
 struct disp_cmd_queue disp_cmd_queue;
 
+/* The sound and display command currently being executed. Sound and display
+   commands often involve an element of waiting around (especially sound
+   commands). snd_cmd_state and disp_cmd_state contain the command that was
+   last taken off the queue and which is still executing. */
 struct snd_cmd_state snd_cmd_state;
 struct disp_cmd_state disp_cmd_state;
 
@@ -160,6 +169,11 @@ struct disp_cmd_state disp_cmd_state;
 boz_clock clocks[NUM_CLOCKS];
 unsigned int master_clocks_enabled = 0; // bitmask
 
+/* Press threshold: the number of microseconds we must sense a button held down
+   for before we consider it a press event.
+   Release threshold: the number of microseconds we must sense the button
+   continuously released before we accept another press event.
+*/
 const unsigned int BUTTON_PRESS_THRESHOLD_US = 0;
 const unsigned int BUTTON_RELEASE_THRESHOLD_US = 15000;
 const unsigned int ROTARY_CLOCK_PRESS_THRESHOLD_US = 0;
@@ -178,6 +192,9 @@ const byte ROTARY_TURN_MIN_GAP_MS = 15;
 char button_check_start = 0;
 char button_check_direction = 1;
 
+/* The state of each of the buttons (se struct button_state). Here we store
+   the current state of the buzzer buttons, the play, yellow and reset buttons,
+   the rotary encoder's pushbutton, and the rotary encoder's clock input. */
 struct button_state buttons[] = {
     { PIN_BUZZER_0,  FUNC_BUZZER, 0, BUTTON_PRESS_THRESHOLD_US, BUTTON_RELEASE_THRESHOLD_US, 0, 0, 0, 0, 1 },
     { PIN_BUZZER_1,  FUNC_BUZZER, 1, BUTTON_PRESS_THRESHOLD_US, BUTTON_RELEASE_THRESHOLD_US, 1, 0, 0, 0, 1 },
@@ -197,13 +214,16 @@ int re_data_value_last_clock = LOW;
 unsigned long re_last_turn_high_ms = 0;
 unsigned long re_last_turn_low_ms = 0;
 
-// pointer to dynamic memory allocated by boz_mm_main_alloc
+/* A pointer to dynamic memory allocated by boz_mm_main_alloc, this contains
+   the stack of app_context structs. There is one for each running app. When
+   an app calls another app, the new app context gets pushed onto the stack,
+   and when the called app exits, its context is taken off the stack again. */
 struct app_context *app_context_stack;
 
 /* pointer to current app context */
 struct app_context *app_context = NULL;
 
-/* dynamic memory pool for boz_mm */
+/* dynamic memory pool for boz_mm_* functions */
 char boz_dyn_arena[BOZ_DYN_ARENA_SIZE];
 
 /* If an app calls another app, the app's init function, flags etc go in
@@ -346,18 +366,19 @@ boz_leds_set(int mask) {
 }
 #else
 
-byte leds_to_pins[] = { PIN_LED_R, PIN_LED_G, PIN_LED_Y, PIN_LED_B };
+const PROGMEM byte leds_to_pins[] = { PIN_LED_R, PIN_LED_G, PIN_LED_Y, PIN_LED_B };
 
 void
 boz_led_set(int which_led, int on) {
-    int pin = leds_to_pins[which_led & 3];
+    int pin = pgm_read_byte_near(&leds_to_pins[which_led & 3]);
     digitalWrite(pin, on ? HIGH : LOW);
 }
 
 void
 boz_leds_set(int mask) {
     for (int i = 0; i < 4; ++i) {
-        boz_led_set(i, (mask & (1 << i)) != 0);
+        boz_led_set(i, mask & 1);
+        mask >>= 1;
     }
 }
 
@@ -493,6 +514,11 @@ boz_is_button_pressed(int button_func, int buzzer_id, unsigned long *pressed_sin
 
 int
 boz_get_battery_voltage(void) {
+    /* analogRead() gives us a value between 0 and 1023, which represents a
+       voltage between 0 and 5V. The voltage on this pin is in the middle of a
+       potential divider between VIN and GND, so it's half the voltage at VIN.
+       So if the analogue value on the pin is 0, the voltage is 0V, and if it's
+       1023, it's 10V. We return the answer in millivolts. */
     int value = analogRead(A6);
     return (int) ((10000L * value) / 1023L);
 }
@@ -500,6 +526,7 @@ boz_get_battery_voltage(void) {
 unsigned int
 boz_eeprom_get_region_size() {
     if (app_context) {
+        /* Return the amount of EEPROM reserved for this application */
         return app_context->eeprom_length;
     }
     else {
@@ -594,7 +621,10 @@ boz_env_reset() {
     master_clocks_enabled = 0;
 
     noTone(PIN_SPEAKER);
+
+#ifdef BOZ_ORIGINAL
     boz_shift_reg_init();
+#endif
 
     boz_lcd_clear();
 
@@ -814,10 +844,15 @@ byte read_turny_push_button(void) {
     return digitalRead(PIN_QM_RE_KEY);
 #else
     byte value;
+    /* Make the interrupt line high-impedance, so it doesn't interfere with
+       the rotary-encoder's push button, which is connected to it */
     pinMode(PIN_BUTTON_INT, INPUT);
     value = digitalRead(PIN_QM_RE_KEY);
+
+    /* Put the interrupt line back how we found it */
     pinMode(PIN_BUTTON_INT, OUTPUT);
     digitalWrite(PIN_BUTTON_INT, LOW);
+
     return value;
 #endif
 }
@@ -885,6 +920,7 @@ void setup() {
     /* Initialise the LCD */
     boz_lcd_init();
 
+    /* Clear sound and display queue, etc */
     boz_env_reset();
 
 #ifdef BOZ_SERIAL
