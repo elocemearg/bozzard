@@ -43,7 +43,7 @@
  *    This app must have (at least) an init function.
  *    This init function returns void and takes a single void * argument. If
  *    your app is called from the main menu, this argument will be NULL.
- *    See battery.ino (which displays the battery voltage) for an example of
+ *    See sysinfo.ino (which displays version information) for an example of
  *    a simple app.
  *
  * 2. Add a symbol for your app in the BOZ_APP_ID enum in boz_app_inits.h.
