@@ -217,9 +217,9 @@ void battery_refresh_battery(void *cookie) {
         int centivolts = (millivolts + 5) / 10;
         byte percent;
 
-        boz_display_write_long(centivolts / 100, 2, NULL);
+        boz_display_write_long(centivolts / 100, 2, 0);
         boz_display_write_char('.');
-        boz_display_write_long(centivolts % 100, 2, "0");
+        boz_display_write_long(centivolts % 100, 2, BOZ_DISP_NUM_ZERO_PAD);
         boz_display_write_string_P(s_battery_v_space);
 
         percent = voltage_to_percent(centivolts);
@@ -270,7 +270,7 @@ void battery_refresh_battery(void *cookie) {
         else
 #endif
         {
-            boz_display_write_long(percent, 4, NULL);
+            boz_display_write_long(percent, 4, 0);
             boz_display_write_char('%');
         }
 

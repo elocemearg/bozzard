@@ -101,33 +101,39 @@ boz_display_write_string_P(const char *str_pm) {
 #define BOZ_DISPLAY_CLOSE_ARROW_CHAR ']'
 
 int
-boz_display_write_long(long n, int min_width, const char *flags) {
+boz_display_write_long(long n, int min_width, int flags) {
     char str[20]; // space for arrow/bracket, sign, 16 characters, arrow, nul
     unsigned int str_p = 0;
-    int force_sign = 0;
     unsigned int num_start = 0;
-    char pad_char = ' ';
+    char pad_char;
     char sign = '\0';
-    char arrow_char_left = 0;
-    char arrow_char_right = 0;
+    char arrow_char_left;
+    char arrow_char_right;
+    int base;
 
-    if (flags) {
-        while (*flags) {
-            if (*flags == '+')
-                force_sign = 1;
-            else if (*flags == '0')
-                pad_char = '0';
-            else if (*flags == 'A') {
-                arrow_char_left = BOZ_DISPLAY_OPEN_ARROW_CHAR;
-                arrow_char_right = BOZ_DISPLAY_CLOSE_ARROW_CHAR;
-            }
-            else if (*flags == 'a') {
-                arrow_char_left = ' ';
-                arrow_char_right = ' ';
-            }
+    if (flags & BOZ_DISP_NUM_ZERO_PAD)
+        pad_char = '0';
+    else
+        pad_char = ' ';
 
-            ++flags;
-        }
+    if (flags & BOZ_DISP_NUM_ARROWS) {
+        arrow_char_left = BOZ_DISPLAY_OPEN_ARROW_CHAR;
+        arrow_char_right = BOZ_DISPLAY_CLOSE_ARROW_CHAR;
+    }
+    else if (flags & BOZ_DISP_NUM_SPACES) {
+        arrow_char_left = ' ';
+        arrow_char_right = ' ';
+    }
+    else {
+        arrow_char_left = 0;
+        arrow_char_right = 0;
+    }
+
+    if (flags & BOZ_DISP_NUM_HEX) {
+        base = 16;
+    }
+    else {
+        base = 10;
     }
 
     if (min_width > 16)
@@ -137,7 +143,7 @@ boz_display_write_long(long n, int min_width, const char *flags) {
 
     if (n < 0)
         sign = '-';
-    else if (n > 0 && force_sign)
+    else if (n > 0 && (flags & BOZ_DISP_NUM_FORCE_SIGN))
         sign = '+';
 
     /* Build the number backwards, because that's easier, then reverse it
@@ -149,11 +155,20 @@ boz_display_write_long(long n, int min_width, const char *flags) {
     num_start = str_p;
 
     do {
-        int digit = n % 10;
+        int digit = n % base;
+        char c;
         if (digit < 0)
             digit = -digit;
-        str[str_p++] = '0' + digit;
-        n /= 10;
+
+        c = (char) digit;
+        if (digit < 10)
+            c += '0';
+        else
+            c += 'A' - 10;
+
+        str[str_p++] = c;
+
+        n /= base;
     } while (n != 0);
 
     if (sign)

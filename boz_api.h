@@ -34,6 +34,12 @@
 #define BOZ_NUM_CLOCKS 4
 #define BOZ_NUM_LEDS 4
 
+#define BOZ_DISP_NUM_FORCE_SIGN 1
+#define BOZ_DISP_NUM_ZERO_PAD 2
+#define BOZ_DISP_NUM_ARROWS 4
+#define BOZ_DISP_NUM_SPACES 8
+#define BOZ_DISP_NUM_HEX 16
+
 /******************************************************************************
  *
  * To create a new app:
@@ -430,28 +436,34 @@ boz_display_write_string_P(const char *str_pm);
 /* Format the given long integer "num" as a string, and write it to the current
  * display position. If min_width is positive, it specifies the minimum number
  * of characters that will be written (max 20). If necessary, the number is
- * padded on the right with spaces (or zeroes, if the 0 flag is used) to
- * achieve this.
- * "flags" may contain a list of flag characters to modify how the number is
- * formatted.
- *     '+': Write a plus sign before a positive integer.
- *     '0': Left-pad with zeroes instead of spaces to make the number at least
- *          min_width chars.
- *     'A': Draw arrows (or brackets, or some sort of highlighter) on the left
- *          and right of the number.
- *     'a': Leave space for arrows on the left and right of the number
- *          but don't draw them.
- *          If arrows are drawn, then if we're padding with spaces (the
- *          default) the arrows are added before the padding. If we're padding
- *          with zeroes, the arrows are added after the padding. In any case,
- *          the min_width does not include the arrows.
- * If flags is empty or NULL, it is ignored and none of the flags are
- * considered to be set.
+ * padded on the right with spaces (or zeroes, if the BOZ_DISP_NUM_ZERO_PAD
+ * flag is used) to achieve this.
+ *
+ * "flags" is a set of any of the following flags, bitwise-ORed together. They
+ * modify how the number is formatted.
+ *
+ * BOZ_DISP_NUM_FORCE_SIGN
+ *     Write a plus sign before a positive integer.
+ * BOZ_DISP_NUM_ZERO_PAD
+ *     Left-pad with zeroes instead of spaces to make the number at least
+ *     min_width chars.
+ * BOZ_DISP_NUM_ARROWS
+ *     Draw arrows (or brackets, or some sort of highlighter) on the left
+ *     and right of the number.
+ * BOZ_DISP_NUM_SPACES
+ *     Leave space for arrows on the left and right of the number but don't
+ *     draw them.
+ *     If arrows are drawn, then if we're padding with spaces (the
+ *     default) the arrows are added before the padding. If we're padding
+ *     with zeroes, the arrows are added after the padding. In any case,
+ *     the min_width does not include the arrows.
+ * BOZ_DISP_NUM_HEX
+ *     'X': Format the number in hexadecimal, not base 10.
  *
  * Returns the total number of characters actually written, or -1 on error.
  */
 int
-boz_display_write_long(long num, int min_width, const char *flags);
+boz_display_write_long(long num, int min_width, int flags);
 
 /* boz_lcd_get_backlight_state
  * Query the state of the LCD's backlight.
@@ -904,8 +916,12 @@ boz_get_battery_voltage(void);
 
 /* boz_crash
  * Run the crash application, which displays a message on the screen and
- * sets the LEDs to the given pattern. The user has to reboot the Bozzard. */
+ * sets the LEDs to the bottom four bits of the given pattern. The pattern
+ * value will be displayed on the screen in hex, along with the address of the
+ * boz_crash caller.
+ * This function never returns, and there is no way to continue. The user has
+ * to reboot the Bozzard. */
 void
-boz_crash(int pattern);
+boz_crash(unsigned int pattern);
 
 #endif

@@ -291,7 +291,7 @@ void
 music_loop_draw_display_start(void) {
     boz_display_clear();
     boz_display_write_char(0);
-    boz_display_write_long(ml_melody_beats_per_bar, 2, NULL);
+    boz_display_write_long(ml_melody_beats_per_bar, 2, 0);
     boz_display_write_char(' ');
     boz_display_write_char(4);
     for (int i = 5; i < 16; ++i)
@@ -299,7 +299,7 @@ music_loop_draw_display_start(void) {
 
     boz_display_set_cursor(1, 0);
     boz_display_write_char(1);
-    boz_display_write_long(4, 2, NULL);
+    boz_display_write_long(4, 2, 0);
     boz_display_write_char(' ');
     boz_display_write_char(5);
     for (int i = 5; i < 16; ++i)

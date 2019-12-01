@@ -17,15 +17,15 @@ test_update_display_clock(long value, int full) {
     ms = value % 1000;
     tenths = ms / 100;
 
-    boz_display_write_long(minutes, 2, "0");
+    boz_display_write_long(minutes, 2, BOZ_DISP_NUM_ZERO_PAD);
     boz_display_write_char(':');
-    boz_display_write_long(seconds, 2, "0");
+    boz_display_write_long(seconds, 2, BOZ_DISP_NUM_ZERO_PAD);
     boz_display_write_char('.');
     if (full) {
-        boz_display_write_long(ms, 3, "0");
+        boz_display_write_long(ms, 3, BOZ_DISP_NUM_ZERO_PAD);
     }
     else {
-        boz_display_write_long(tenths, 1, NULL);
+        boz_display_write_long(tenths, 1, 0);
         boz_display_write_char(' ');
         boz_display_write_char(' ');
     }
@@ -63,7 +63,7 @@ void
 test_buzz(void *cookie, int which_buzz) {
     boz_clock_stop(clock);
     boz_display_set_cursor(0, 15);
-    boz_display_write_long((long) which_buzz + 1, 1, NULL);
+    boz_display_write_long((long) which_buzz + 1, 1, 0);
     test_update_display_clock(boz_clock_value(clock), 1);
 }
 
@@ -71,7 +71,7 @@ test_buzz(void *cookie, int which_buzz) {
 void
 refresh_rotary_value() {
     boz_display_set_cursor(0, 0);
-    boz_display_write_long(rotary_value, 6, NULL);
+    boz_display_write_long(rotary_value, 6, 0);
 }
 
 void
@@ -93,7 +93,7 @@ void test_init(void *cookie) {
     boz_display_clear();
 
     boz_display_set_cursor(0, 0);
-    boz_display_write_long(rotary_value, 6, "+");
+    boz_display_write_long(rotary_value, 6, BOZ_DISP_NUM_FORCE_SIGN);
 
     clock = boz_clock_create(clock_initial_ms, 1);
 

@@ -6,6 +6,7 @@
 #include "boz_app.h"
 #include "boz_pins.h"
 #include "boz_notes.h"
+#include "boz_crash.h"
 
 #include <avr/pgmspace.h>
 #include <avr/sleep.h>
@@ -483,9 +484,31 @@ boz_app_exit(int exit_status) {
 }
 
 void
-boz_crash(int pattern) {
+boz_crash(unsigned int pattern) {
+    /* Not using automatic variables in this function because we want a
+       predictable stack layout so we can find the return address of this
+       function, which in turn tells us where we were called from. */
+    static struct boz_crash_arg arg;
+
+    /* Possibly the least portable part of this whole code.
+       First, read the stack pointer, which is mapped at memory address
+       0x5d. Add 1 to it, so we're pointing at the return address rather than
+       at the byte immediately before it. */
+    arg.addr = *(byte **) (0x5d) + 1;
+
+    /* Return address is stored on the stack endian-swapped for some reason.
+       Also it's half the actual address, which is an Atmel optimisation taking
+       advantage of all instructions having an even number of bytes. So having
+       extracted the return address, endian-swap it, double it, then take four
+       off to take account of the call to this boz_crash function. arg.addr
+       then points to the boz_crash call that called us. */
+    arg.addr = (void *) ( 2 * ( (((unsigned int) ((byte *) arg.addr)[0]) << 8) | ((byte *) arg.addr)[1] ) - 4 );
+
+    arg.pattern = pattern;
+
+    /* Call the crash program. */
     app_context = NULL;
-    boz_app_call(BOZ_APP_ID_CRASH, &pattern, NULL, NULL);
+    boz_app_call(BOZ_APP_ID_CRASH, &arg, NULL, NULL);
 
     /* return to the main loop immediately, and stay there, don't return to
        the application that called us */
@@ -813,6 +836,15 @@ static void deliver_button_event(struct button_state *button) {
             break;
     }
     button->event_delivered = 1;
+}
+
+/* If *next_wake_set is zero, or if *next_wake is after t, then set
+   *next_wake_set to 1 and set *next_wake to t. */
+static void update_if_passed(byte *next_wake_set, unsigned long *next_wake, unsigned long t) {
+    if (!*next_wake_set || time_passed(*next_wake, t)) {
+        *next_wake_set = 1;
+        *next_wake = t;
+    }
 }
 
 volatile byte boz_wake = 0;
@@ -1340,13 +1372,11 @@ void loop() {
         can_sleep = 0;
 
     if (can_sleep) {
-        if (snd_cmd_state.running && (!next_wake_ms_set || time_passed(next_wake_ms, snd_cmd_state.next_step_millis))) {
-            next_wake_ms_set = 1;
-            next_wake_ms = snd_cmd_state.next_step_millis;
+        if (snd_cmd_state.running) {
+            update_if_passed(&next_wake_ms_set, &next_wake_ms, snd_cmd_state.next_step_millis);
         }
-        if (disp_cmd_state.running && (!next_wake_us_set || time_passed(next_wake_us, disp_cmd_state.next_step_micros))) {
-            next_wake_us_set = 1;
-            next_wake_us = disp_cmd_state.next_step_micros;
+        if (disp_cmd_state.running) {
+            update_if_passed(&next_wake_us_set, &next_wake_us, disp_cmd_state.next_step_micros);
         }
 
         if (app_context && app_context->clocks_enabled) {
@@ -1361,36 +1391,25 @@ void loop() {
                     long clock_event_millis;
                     if (clock->alarm_enabled) {
                         clock_event_millis = ms + boz_clock_get_ms_until_alarm(clock);
-                        if (!next_wake_ms_set || time_passed(next_wake_ms, clock_event_millis)) {
-                            next_wake_ms_set = 1;
-                            next_wake_ms = clock_event_millis;
-                        }
+                        update_if_passed(&next_wake_ms_set, &next_wake_ms, clock_event_millis);
                     }
 
                     if (clock->min_enabled && !boz_clock_is_direction_forwards(clock)) {
                         clock_event_millis = ms + (boz_clock_value(clock) - clock->min_ms);
-                        if (!next_wake_ms_set || time_passed(next_wake_ms, clock_event_millis)) {
-                            next_wake_ms_set = 1;
-                            next_wake_ms = clock_event_millis;
-                        }
+                        update_if_passed(&next_wake_ms_set, &next_wake_ms, clock_event_millis);
                     }
 
                     if (clock->max_enabled && boz_clock_is_direction_forwards(clock)) {
                         clock_event_millis = ms + (clock->max_ms - boz_clock_value(clock));
-                        if (!next_wake_ms_set || time_passed(next_wake_ms, clock_event_millis)) {
-                            next_wake_ms_set = 1;
-                            next_wake_ms = clock_event_millis;
-                        }
+                        update_if_passed(&next_wake_ms_set, &next_wake_ms, clock_event_millis);
                     }
                 }
             }
         }
 
         /* If this app has set a general alarm, take account of that */
-        if (app_context && app_context->alarm_handler && (!next_wake_ms_set ||
-                    time_passed(next_wake_ms, app_context->alarm_time_millis))) {
-            next_wake_ms_set = 1;
-            next_wake_ms = app_context->alarm_time_millis;
+        if (app_context && app_context->alarm_handler) {
+            update_if_passed(&next_wake_ms_set, &next_wake_ms, app_context->alarm_time_millis);
         }
     }
 

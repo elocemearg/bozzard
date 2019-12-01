@@ -402,25 +402,25 @@ static void print_clock_value(long value_ms, const struct chess_clock_format *fo
     value_ms = abs_value_ms;
 
     if (format.show_hours) {
-        boz_display_write_long(value_ms / 3600000L, 1, NULL);
+        boz_display_write_long(value_ms / 3600000L, 1, 0);
     }
     if (format.show_hour_colon) {
         boz_display_write_char(':');
     }
     if (format.show_minutes) {
-        boz_display_write_long((value_ms / 60000L) % 60, format.minutes_field_width, format.minutes_zero_pad ? "0" : NULL);
+        boz_display_write_long((value_ms / 60000L) % 60, format.minutes_field_width, format.minutes_zero_pad ? BOZ_DISP_NUM_ZERO_PAD : 0);
     }
     if (format.show_minutes_colon) {
         boz_display_write_char(':');
     }
     if (format.show_seconds) {
-        boz_display_write_long((value_ms / 1000L) % 60, format.seconds_field_width, format.seconds_zero_pad ? "0" : NULL);
+        boz_display_write_long((value_ms / 1000L) % 60, format.seconds_field_width, format.seconds_zero_pad ? BOZ_DISP_NUM_ZERO_PAD : NULL);
     }
     if (format.show_decimal_point) {
         boz_display_write_char('.');
     }
     if (format.show_tenths) {
-        boz_display_write_long((value_ms / 100L) % 10, 1, "0");
+        boz_display_write_long((value_ms / 100L) % 10, 1, BOZ_DISP_NUM_ZERO_PAD);
     }
 
     for (int i = 0; i < format.trailing_spaces; ++i) {

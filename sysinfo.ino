@@ -19,6 +19,10 @@ sysinfo_init(void *dummy) {
     /* Turn the knob to switch pages */
     boz_set_event_handler_qm_rotary(sysinfo_turn_page);
 
+    /* If buzzer 0 is being held down, crash - this tests the crash routine */
+    if (boz_is_button_pressed(FUNC_BUZZER, 0, NULL))
+        boz_crash(0xdead);
+
     sysinfo_refresh(0);
 }
 
@@ -55,7 +59,7 @@ sysinfo_refresh(byte page) {
         /* Write Bozzard followed by the version number */
         boz_display_write_string_P(s_sysinfo_boz_v);
         for (byte i = 0; i < 3; ++i) {
-            boz_display_write_long((version >> 24) & 0xff, 0, NULL);
+            boz_display_write_long((version >> 24) & 0xff, 0, 0);
             if (i < 2)
                 boz_display_write_char('.');
             version <<= 8;

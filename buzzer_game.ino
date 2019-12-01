@@ -396,15 +396,15 @@ static void update_clock_value(long ms, int decimal_places) {
     long frac = (ms % 1000) / divisor;
     boz_display_set_cursor(0, 4);
     if (minutes > 0 || rules->time_limit_sec == 0 || rules->time_limit_sec > 60) {
-        boz_display_write_long(minutes, 2, "");
+        boz_display_write_long(minutes, 2, 0);
         boz_display_write_char(':');
-        boz_display_write_long(seconds, 2, "0");
+        boz_display_write_long(seconds, 2, BOZ_DISP_NUM_ZERO_PAD);
     }
     else {
-        boz_display_write_long(seconds, 3, NULL);
+        boz_display_write_long(seconds, 3, 0);
     }
     boz_display_write_char('.');
-    boz_display_write_long(frac, decimal_places, "0");
+    boz_display_write_long(frac, decimal_places, BOZ_DISP_NUM_ZERO_PAD);
     for (int i = decimal_places; i < 3; ++i) {
         boz_display_write_char(' ');
     }
@@ -456,7 +456,7 @@ static void update_buzz_indicator(int which_buzzer) {
     boz_display_set_cursor(1, 0);
     for (int b = 0; b < 4; ++b) {
         if (b == which_buzzer) {
-            boz_display_write_long(b + 1, 1, "");
+            boz_display_write_long(b + 1, 1, 0);
             boz_display_write_string_P(s_bg_up);
         }
         else {
@@ -473,17 +473,17 @@ static void update_past_buzz_time(int is_right, long ms) {
 
     if (ms >= 60000L) {
         /* If the buzz is one minute or more, use the format MM:SS.T */
-        boz_display_write_long(ms / 60000L, is_right ? 2 : 1, "");
+        boz_display_write_long(ms / 60000L, is_right ? 2 : 1, 0);
         boz_display_write_char(':');
-        boz_display_write_long((ms / 1000L) % 60, 2, "0");
+        boz_display_write_long((ms / 1000L) % 60, 2, BOZ_DISP_NUM_ZERO_PAD);
         boz_display_write_char('.');
-        boz_display_write_long((ms / 100) % 10, 1, "0");
+        boz_display_write_long((ms / 100) % 10, 1, BOZ_DISP_NUM_ZERO_PAD);
     }
     else {
         /* If the buzz is on less than a minute, use the format SS.TTTs */
-        boz_display_write_long(ms / 1000, is_right ? 2 : 1, "");
+        boz_display_write_long(ms / 1000, is_right ? 2 : 1, 0);
         boz_display_write_char('.');
-        boz_display_write_long(ms % 1000, 3, "0");
+        boz_display_write_long(ms % 1000, 3, BOZ_DISP_NUM_ZERO_PAD);
         boz_display_write_char('s');
     }
 }
@@ -496,13 +496,13 @@ static void update_late_buzz(int is_right, long ms_late) {
         boz_display_set_cursor(1, 0);
     
     if (ms_late < 1000) {
-        boz_display_write_long(ms_late, is_right ? 5 : 0, "+");
+        boz_display_write_long(ms_late, is_right ? 5 : 0, BOZ_DISP_NUM_FORCE_SIGN);
         boz_display_write_string("ms");
     }
     else {
-        boz_display_write_long(sec, is_right ? 3 : 0, "+");
+        boz_display_write_long(sec, is_right ? 3 : 0, BOZ_DISP_NUM_FORCE_SIGN);
         boz_display_write_char('.');
-        boz_display_write_long((ms_late % 1000) / 10, 2, "0");
+        boz_display_write_long((ms_late % 1000) / 10, 2, BOZ_DISP_NUM_ZERO_PAD);
         boz_display_write_char('s');
     }
     if (!is_right)
@@ -514,7 +514,7 @@ static void redraw_display(struct buzzer_game_state *state) {
     boz_display_clear();
 
     if (state->generated_target) {
-        boz_display_write_long(state->generated_target, 3, NULL);
+        boz_display_write_long(state->generated_target, 3, 0);
     }
 
     if (boz_clock_running(state->clock)) {
@@ -1058,7 +1058,7 @@ bg_generate_target(void *cookie) {
     state->generated_target = (int) random(101, 1000);
 
     boz_display_set_cursor(0, 0);
-    boz_display_write_long(state->generated_target, 3, NULL);
+    boz_display_write_long(state->generated_target, 3, 0);
 }
 
 void

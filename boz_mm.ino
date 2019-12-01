@@ -13,9 +13,9 @@
 
 char *boz_mm_arena = NULL;
 boz_mm_size boz_mm_arena_size = 0;
-byte crash_on_alloc_failure = 1;
+byte crash_on_alloc_failure = 0;
 
-extern void boz_crash(int);
+extern void boz_crash(unsigned int);
 
 struct boz_mm_header {
     union {
@@ -47,11 +47,7 @@ int boz_mm_used_list_stack_ptr = 0;
 #include <assert.h>
 #define mm_assert(CONDITION, CODE) assert(CONDITION)
 #else
-static void mm_assert(int condition, int code) {
-    if (!condition) {
-        boz_crash(code);
-    }
-}
+#define mm_assert(CONDITION, CODE) { if (!(CONDITION)) boz_crash(CODE); }
 #endif
 
 static void mm_list_remove(struct boz_mm_header **startp, struct boz_mm_header *header) {

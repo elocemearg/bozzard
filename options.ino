@@ -426,23 +426,21 @@ execute_disp_inst(struct disp_print_inst *inst, long value) {
     }
     else {
         long n = value / inst->value_div;
-        char flags[3];
-        i = 0;
+        int flags = 0;
 
         if (inst->value_mod)
             n = n % inst->value_mod;
 
         if (inst->control_depth == options_state->control_depth) {
             /* Draw arrows pointing to this field */
-            flags[i++] = 'A';
+            flags |= BOZ_DISP_NUM_ARROWS;
         }
         else {
             /* Leave space for arrows pointing to this field */
-            flags[i++] = 'a';
+            flags |= BOZ_DISP_NUM_SPACES;
         }
         if (inst->control_depth > 1)
-            flags[i++] = '0';
-        flags[i] = '\0';
+            flags |= BOZ_DISP_NUM_ZERO_PAD;
         i = boz_display_write_long(n, inst->num_chars, flags);
         if (i < 0)
             return i;
