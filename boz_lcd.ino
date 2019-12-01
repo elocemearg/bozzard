@@ -1,10 +1,31 @@
 #include "boz_lcd.h"
 #include "boz_shiftreg.h"
 
+#define BOZ_NUM_CHAR_PATTERNS 8
+const PROGMEM byte boz_char_patterns[][8] = {
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }, // 0: blank
+    { 0x01, 0x03, 0x07, 0x0f, 0x07, 0x03, 0x01, 0x00 }, // 1: back triangle
+    { 0x10, 0x18, 0x1c, 0x1e, 0x1c, 0x18, 0x10, 0x00 }, // 2: play triangle
+    { 0x00, 0x00, 0x1f, 0x1f, 0x1f, 0x00, 0x00, 0x00 }, // 3: thick horiz bar
+    { 0x04, 0x08, 0x1e, 0x09, 0x05, 0x01, 0x01, 0x0e }, // 4: reset symbol
+    { 0x03, 0x14, 0x18, 0x1c, 0x00, 0x00, 0x00, 0x00 }, // 5: a-clockwise wheel
+    { 0x18, 0x05, 0x03, 0x07, 0x00, 0x00, 0x00, 0x00 }, // 6: clockwise wheel
+    { 0x00, 0x0e, 0x19, 0x17, 0x17, 0x19, 0x0e, 0x00 }, // 7: copyright symbol
+};
+
 #ifdef BOZ_ORIGINAL
+
+/* Code for the original Bozzer prototype. You probably want to ignore all
+   of this and start after #else.
+*/
 
 void
 boz_lcd_send(unsigned int cmd) {
+    if (cmd == BOZ_LCD_RESET_CGRAM) {
+        boz_lcd_reset_cgram_patterns();
+        return;
+    }
+
     if (cmd & 0x100) {
         digitalWrite(PIN_DISP_RS, HIGH);
     }
@@ -99,9 +120,11 @@ boz_lcd_set_cgram_address(byte address) {
 
 #else
 
+/* Code for the display attached to the modern Bozzard, which uses I2C */
+
 #include <Wire.h>
 
-int backlight_on = 1;
+byte backlight_on = 1;
 
 /* The I2C helper on the back of the display board receives a data byte,
    like this:
@@ -123,11 +146,22 @@ int backlight_on = 1;
 #define PAYLOAD_E (1 << 2)
 #define PAYLOAD_BACKLIGHT (1 << 3)
 #define PAYLOAD_NIBBLE_SHIFT 4
+
+/* The I2C display component I have uses 0x27 as its I2C address. Change this
+   if you're using a display which uses a different address. */
 #define DISPLAY_I2C_ADDRESS 0x27
 
 void
 boz_lcd_send(unsigned int cmd) {
     byte rs = 0;
+
+    /* If cmd == BOZ_LCD_RESET_CGRAM, then instead of sending one command,
+       we send a whole load of commands to reset the CGRAM characters to their
+       defaults. */
+    if (cmd == BOZ_LCD_RESET_CGRAM) {
+        boz_lcd_reset_cgram_patterns();
+        return;
+    }
 
     /* If cmd & 0x100 then RS is set, otherwise it's clear. */
     if (cmd & 0x100) {
@@ -164,13 +198,13 @@ boz_lcd_send_nibble(unsigned int data, byte rs) {
     send_i2c(payload);
 }
 
-int
+byte
 boz_lcd_get_backlight_state(void) {
     return backlight_on;
 }
 
 void
-boz_lcd_set_backlight_state(int value) {
+boz_lcd_set_backlight_state(byte value) {
     backlight_on = value;
     send_i2c(backlight_on ? PAYLOAD_BACKLIGHT : 0);
 }
@@ -222,3 +256,22 @@ boz_lcd_set_cgram_address(byte address) {
 }
 
 #endif
+
+void
+boz_lcd_reset_cgram_patterns(void) {
+    /* Set up the default character patterns for the eight user-definable
+       character codes. This doesn't use the display command queue, it talks
+       to the display directly with the necessary delays. This is because there
+       are a lot of characters to define, each with eight rows, so we'd be in
+       danger of filling up the queue if we try to enqueue all of this at
+       once. */
+    for (int char_index = 0; char_index < BOZ_NUM_CHAR_PATTERNS; ++char_index) {
+        boz_lcd_set_cgram_address(char_index << 3);
+        delayMicroseconds(150);
+        for (int i = 0; i < 8; ++i) {
+            boz_lcd_send(0x100 | pgm_read_byte_near(&boz_char_patterns[char_index][i]));
+            delayMicroseconds(150);
+        }
+    }
+}
+

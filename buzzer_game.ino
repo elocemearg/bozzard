@@ -8,7 +8,6 @@
    struct game_rules *rules, which must be set before buzzer_game_general_init()
    is called. */
 
-
 const PROGMEM char s_bg_time_limit[] = "Time limit";
 const PROGMEM char s_bg_clock_counts_up[] = "Clock counts up";
 const PROGMEM char s_bg_warn_remaining[] = "Warn remaining";
@@ -251,9 +250,10 @@ struct game_rules {
     unsigned int show_buzz_time : 1;
 
     /* yellow_generates_target
-       If true, the yellow button generates a pseudorandom number between 101
-       and 999 inclusive and displays it in the top-left corner. This is pretty
-       much only useful for Countdown.
+       If true, and if BUZZER_GAME_RANDOM_TARGET is defined, the yellow button
+       generates a pseudorandom number between 101 and 999 inclusive and
+       displays it in the top-left corner. This is pretty much only useful for
+       Countdown.
        If false, the yellow button unlocks the buzzers. This is useful if
        lockout_time_ms is large (or zero), if you want to unlock the buzzers
        early (or at all).
@@ -338,6 +338,10 @@ const PROGMEM struct game_rules basic_buzzer_rules = {
 
 #define NUM_BUZZERS 4
 
+/* Uncomment to enable random number feature. This adds about 500 bytes of
+   program code. */
+//#define BUZZER_GAME_RANDOM_TARGET
+
 struct buzzer_game_state {
     boz_clock clock;
 
@@ -384,7 +388,9 @@ static struct buzzer_game_state *bg_state;
 #define IS_RIGHT_SIDE(BUZZER) ((BUZZER) >= rules->first_c2_buzzer)
 #define IS_SIDE_N(BUZZER, SIDE) ((BUZZER) >= 0 && ((!!(SIDE)) == ((BUZZER) >= rules->first_c2_buzzer)))
 
+#ifdef BUZZER_GAME_RANDOM_TARGET
 char prng_seeded = 0;
+#endif
 
 static void update_clock_value(long ms, int decimal_places) {
     int divisor = 1;
@@ -1042,6 +1048,7 @@ fail:
     }
 }
 
+#ifdef BUZZER_GAME_RANDOM_TARGET
 void
 bg_generate_target(void *cookie) {
     struct buzzer_game_state *state = (struct buzzer_game_state *) cookie;
@@ -1060,6 +1067,7 @@ bg_generate_target(void *cookie) {
     boz_display_set_cursor(0, 0);
     boz_display_write_long(state->generated_target, 3, 0);
 }
+#endif
 
 void
 buzzer_game_general_init(const struct game_rules *rules_progmem) {
@@ -1083,9 +1091,11 @@ buzzer_game_general_init(const struct game_rules *rules_progmem) {
     boz_set_event_handler_buzz(bg_buzz_handler);
     boz_set_event_handler_qm_play(bg_play);
     boz_set_event_handler_qm_reset(bg_reset);
+#ifdef BUZZER_GAME_RANDOM_TARGET
     if (rules->yellow_generates_target)
         boz_set_event_handler_qm_yellow(bg_generate_target);
     else
+#endif
         boz_set_event_handler_qm_yellow(bg_unlock_buzzers);
     boz_set_event_handler_qm_rotary_press(bg_rotary_press);
     boz_set_event_cookie(bg_state);

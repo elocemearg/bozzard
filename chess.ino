@@ -312,6 +312,18 @@ struct chess_state {
 
 struct chess_state *chess_state;
 
+static void chess_set_cgram() {
+    /* Program display CGRAM with our whose-turn-it-is and flag characters */
+    boz_display_set_cgram_address(TURN_CHAR << 3);
+    for (int i = 0; i < 8; ++i) {
+        boz_display_write_char(pgm_read_byte_near(turn_char_pattern + i));
+    }
+    boz_display_set_cgram_address(FLAG_CHAR << 3);
+    for (int i = 0; i < 8; ++i) {
+        boz_display_write_char(pgm_read_byte_near(flag_char_pattern + i));
+    }
+}
+
 void
 chess_init_callback(void *cookie, int rc) {
     int preset_picked;
@@ -335,15 +347,7 @@ chess_init_callback(void *cookie, int rc) {
     /* Load the selected time control, whose index is now in preset_picked */
     memcpy_P(&chess_state->rules, &rules_list[preset_picked], sizeof(chess_state->rules));
 
-    /* Program display CGRAM with our whose-turn-it-is and flag characters */
-    boz_display_set_cgram_address(TURN_CHAR << 3);
-    for (int i = 0; i < 8; ++i) {
-        boz_display_write_char(pgm_read_byte_near(turn_char_pattern + i));
-    }
-    boz_display_set_cgram_address(FLAG_CHAR << 3);
-    for (int i = 0; i < 8; ++i) {
-        boz_display_write_char(pgm_read_byte_near(flag_char_pattern + i));
-    }
+    chess_set_cgram();
 
     chess_game_reset(chess_state);
 
@@ -806,6 +810,10 @@ void
 chess_settings_callback(void *cookie, int rc) {
     struct chess_state *state = (struct chess_state *) cookie;
     struct option_menu_context *omc = state->clock_settings_menu_context;
+
+    /* Calling the options app will have reset CGRAM to the defaults, so put
+       our own custom characters back */
+    chess_set_cgram();
 
     if (rc == 0 && state->clock_settings_menu_context != NULL) {
         long *clock_settings_results = omc->results;

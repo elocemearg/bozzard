@@ -22,6 +22,7 @@
 #define BOZ_CHAR_RESET 4
 #define BOZ_CHAR_WHEEL_AC 5
 #define BOZ_CHAR_WHEEL_C 6
+#define BOZ_CHAR_COPYRIGHT 7
 
 #define BOZ_CHAR_BACK_S "\x01"
 #define BOZ_CHAR_PLAY_S "\x02"
@@ -29,6 +30,7 @@
 #define BOZ_CHAR_RESET_S "\x04"
 #define BOZ_CHAR_WHEEL_AC_S "\x05"
 #define BOZ_CHAR_WHEEL_C_S "\x06"
+#define BOZ_CHAR_COPYRIGHT_S "\x07"
 
 #define BOZ_NUM_BUZZERS 4
 #define BOZ_NUM_CLOCKS 4
@@ -473,7 +475,7 @@ boz_display_write_long(long num, int min_width, int flags);
  *
  * Return 1 if the backlight is currently on, or 0 if it is off.
  */
-int
+byte
 boz_lcd_get_backlight_state(void);
 
 /* boz_lcd_set_backlight_state
@@ -485,7 +487,30 @@ boz_lcd_get_backlight_state(void);
  * the backlight is switched off.
  */
 void
-boz_lcd_set_backlight_state(int state);
+boz_lcd_set_backlight_state(byte state);
+
+/* boz_display_reset_cgram_patterns
+ * Enqueue a request to initialise the display's eight CGRAM patterns to their
+ * Bozzard defaults which are as follows:
+ * 0: Blank.
+ * 1: "Back" arrow.
+ * 2: "Play" arrow.
+ * 3: Thick horizontal bar.
+ * 4: "Reset" symbol, consisting of an almost-circular arrow.
+ * 5: Anti-clockwise "turn wheel left" symbol.
+ * 6: Clockwise "turn wheel right" symbol.
+ * 7: Copyright symbol.
+ *
+ * This enqueues one special command to the display queue, which when served
+ * causes several commands to be sent to the LCD. When the command is served it
+ * may take around 11 milliseconds, during which time the main loop will not be
+ * able to do anything else such as respond to events.
+ *
+ * This function is therefore intended to be called occasionally, for example
+ * when an application has called another application which might have modified
+ * CGRAM, and that called application has now returned. */
+int
+boz_display_reset_cgram_patterns(void);
 
 
 /******************************************************************************

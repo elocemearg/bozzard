@@ -153,6 +153,10 @@ mm_play_handler(void *cookie) {
 
 void
 mm_return_callback(void *cookie, int rc) {
+    /* Put the CGRAM back to the defaults, so all our arrows etc show up
+       properly */
+    boz_display_reset_cgram_patterns();
+
     mm_redraw_display(1);
     mm_unlock_buzzers(NULL);
 }

@@ -29,33 +29,6 @@ const PROGMEM struct boz_app app_list[] = {
     { BOZ_APP_ID_CRASH, "Crash", crash_init, 0 },
 };
 
-#if 0
-static int strings_equal(const char *s1, const char *s2) {
-    while (*s1 && *s2) {
-        if (*s1 != *s2) {
-            return 0;
-        }
-        ++s1;
-        ++s2;
-    }
-    return *s1 == *s2;
-}
-
-int
-boz_app_entry_fetch_by_name(struct boz_app *dest, const char *name) {
-    struct boz_app app;
-    for (int i = 0; i < (int) APP_LIST_LENGTH; ++i) {
-        memcpy_P(&app, &app_list[i], sizeof(app));
-        if (strings_equal(app.name, name)) {
-            if (dest != NULL)
-                *dest = app;
-            return 1;
-        }
-    }
-    return 0;
-}
-#endif
-
 int
 boz_app_lookup_id(int id, struct boz_app *dest) {
     for (int i = 0; i < (int) APP_LIST_LENGTH; ++i) {

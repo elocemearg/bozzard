@@ -41,17 +41,6 @@ const PROGMEM struct boz_eeprom_header boz_eeprom_header = {
 #define BOZ_DYN_ARENA_SIZE 512
 //#define BOZ_SOUND_RAMP_LOG // better sound-ramp effect, but +2KB code size
 
-#define BOZ_NUM_CHAR_PATTERNS 7
-const PROGMEM byte boz_char_patterns[][8] = {
-    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }, // 0: blank
-    { 0x01, 0x03, 0x07, 0x0f, 0x07, 0x03, 0x01, 0x00 }, // 1: back triangle
-    { 0x10, 0x18, 0x1c, 0x1e, 0x1c, 0x18, 0x10, 0x00 }, // 2: play triangle
-    { 0x00, 0x00, 0x1f, 0x1f, 0x1f, 0x00, 0x00, 0x00 }, // 3: thick horiz bar
-    { 0x04, 0x08, 0x1e, 0x09, 0x05, 0x01, 0x01, 0x0e }, // 4: reset symbol
-    { 0x03, 0x14, 0x18, 0x1c, 0x00, 0x00, 0x00, 0x00 }, // 5: a-clockwise wheel
-    { 0x18, 0x05, 0x03, 0x07, 0x00, 0x00, 0x00, 0x00 }, // 6: clockwise wheel
-};
-
 /* A single sound command, which is put on the sound queue by an app, and is
    serviced by the main loop. */
 struct snd_cmd {
@@ -651,23 +640,7 @@ boz_env_reset() {
 
     boz_lcd_clear();
 
-    set_cgram_patterns();
-}
-
-static void set_cgram_patterns() {
-    /* Set up our own character patterns. This doesn't use the display command
-       queue, it talks to the display directly with the necessary delays.
-       This is because there are a lot of characters to define, each with eight
-       rows, so we'd be in danger of filling up the queue if the next thing we
-       do is send a load of stuff to the display. */
-    for (int char_index = 0; char_index < BOZ_NUM_CHAR_PATTERNS; ++char_index) {
-        boz_lcd_set_cgram_address(char_index << 3);
-        delayMicroseconds(150);
-        for (int i = 0; i < 8; ++i) {
-            boz_lcd_send(0x100 | pgm_read_byte_near(&boz_char_patterns[char_index][i]));
-            delayMicroseconds(150);
-        }
-    }
+    boz_lcd_reset_cgram_patterns();
 }
 
 static void snd_cmd_step(unsigned long now_ms) {
@@ -1284,13 +1257,6 @@ void loop() {
             /* Pass its return code to the previous app on the stack */
             app_context--;
             app_context->app_call_return_handler(app_context->app_call_return_cookie, app_exit_status);
-
-            if (app_context == app_context_stack) {
-                /* If this app has stuffed CGRAM full of crap, or put the LEDs
-                   on, put it all back how it should be. */
-                set_cgram_patterns();
-                boz_leds_set(0);
-            }
         }
         else {
             /* First app isn't allowed to exit. Sorry. */
@@ -1313,6 +1279,11 @@ void loop() {
                enough space on the app context stack */
             app_context++;
         }
+
+        /* All apps are allowed to assume that when they're called, CGRAM will
+           contain their default characters and the LEDs will be off. */
+        boz_lcd_reset_cgram_patterns();
+        boz_leds_set(0);
 
         app_context_init(app_context);
 

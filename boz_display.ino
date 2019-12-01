@@ -96,6 +96,11 @@ boz_display_write_string_P(const char *str_pm) {
     return boz_display_write_string(str);
 }
 
+int
+boz_display_reset_cgram_patterns(void) {
+    return boz_display_enqueue(BOZ_LCD_RESET_CGRAM);
+}
+
 
 #define BOZ_DISPLAY_OPEN_ARROW_CHAR '['
 #define BOZ_DISPLAY_CLOSE_ARROW_CHAR ']'
