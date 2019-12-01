@@ -25,8 +25,8 @@ const PROGMEM struct boz_app app_list[] = {
     { BOZ_APP_ID_FACTORY_RESET, "Factory reset", factory_reset_init, BOZ_APP_MAIN, 0, 0 },
     { BOZ_APP_ID_SYSINFO, "About Bozzard", sysinfo_init, BOZ_APP_MAIN, 0, 0 },
 
-    { BOZ_APP_ID_OPTION_MENU, "Option menu", option_menu_init, 0 },
-    { BOZ_APP_ID_CRASH, "Crash", crash_init, 0 },
+    { BOZ_APP_ID_OPTION_MENU, "Option menu", option_menu_init, 0, 0, 0 },
+    { BOZ_APP_ID_CRASH, "Crash", crash_init, 0, 0, 0 },
 };
 
 int
