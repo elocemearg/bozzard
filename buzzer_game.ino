@@ -13,7 +13,7 @@ const PROGMEM char s_bg_clock_counts_up[] = "Clock counts up";
 const PROGMEM char s_bg_warn_remaining[] = "Warn remaining";
 const PROGMEM char s_bg_buzz_stops_clock[] = "Buzz stops clock";
 const PROGMEM char s_bg_which_buzzers[] = "Which buzzers?";
-const PROGMEM char s_bg_allow_rebuzz[] = "Allow re-buzz";
+const PROGMEM char s_bg_allow_rebuzz[] = "Allow re-buzz?";
 const PROGMEM char s_bg_lockout_time[] = "Unlock after(ms)";
 const PROGMEM char s_bg_lockout_null[] = "Yellow button";
 const PROGMEM char s_bg_buzz_length_ms[] = "Buzz length (ms)";
@@ -26,6 +26,7 @@ const PROGMEM char s_bg_buzz_noise_all[] = "All different";
 const PROGMEM char s_bg_time_up_noise[] = "Time up noise";
 const PROGMEM char s_bg_time_up_noise_brrp_brrp[] = "Brrp brrp";
 const PROGMEM char s_bg_time_up_noise_beep_4[] = "Beep x4";
+const PROGMEM char s_bg_save_as_default[] = "Save as default?";
 
 const PROGMEM char s_bg_ready[] = BOZ_CHAR_PLAY_S " to start";
 const PROGMEM char s_bg_time[] = "TIME UP  " BOZ_CHAR_RESET_S " reset";
@@ -68,8 +69,9 @@ const PROGMEM char * const s_bg_time_up_noise_names[] = {
 #define BG_OPTIONS_INDEX_BUZZ_NOISE       7
 #define BG_OPTIONS_INDEX_TIME_UP_NOISE    8
 #define BG_OPTIONS_INDEX_WHICH_BUZZERS    9
+#define BG_OPTIONS_INDEX_SAVE_AS_DEFAULT 10
 
-#define BG_OPTIONS_LENGTH                10
+#define BG_OPTIONS_LENGTH                11
 
 const PROGMEM struct option_page buzzer_game_options[] = {
     {
@@ -172,6 +174,16 @@ const PROGMEM struct option_page buzzer_game_options[] = {
         s_bg_which_buzzers_list,
         sizeof(s_bg_which_buzzers_list) / sizeof(s_bg_which_buzzers_list[0])
     },
+    {
+        s_bg_save_as_default,
+        OPTION_TYPE_YES_NO,
+        0,
+        0,
+        1,
+        NULL,
+        NULL,
+        0
+    }
 };
 
 #define GAME_RULES_MAGIC 'R'
@@ -977,9 +989,11 @@ bg_options_return_callback(void *cookie, int rc) {
         rules->two_sides = (rules->first_c2_buzzer < 4);
         rules->magic = GAME_RULES_MAGIC;
 
-        /* Write the new rules out to this app's EEPROM region */
-        boz_eeprom_write(0, rules, sizeof(*rules)); 
-
+        if (bg_options_return[BG_OPTIONS_INDEX_SAVE_AS_DEFAULT]) {
+            /* If the user set "save as default" to Yes, then write the new
+               rules out to this app's EEPROM region */
+            boz_eeprom_write(0, rules, sizeof(*rules)); 
+        }
     }
 
     /* Free the array of options context structure we created for the options
@@ -1030,6 +1044,7 @@ bg_rotary_press(void *cookie) {
         bg_options_return[BG_OPTIONS_INDEX_WHICH_BUZZERS] = 3;
     else
         bg_options_return[BG_OPTIONS_INDEX_WHICH_BUZZERS] = rules->first_c2_buzzer - 1;
+    bg_options_return[BG_OPTIONS_INDEX_SAVE_AS_DEFAULT] = 0;
 
     omc->page_disable_mask = rules->opt_page_disable_mask;
 
