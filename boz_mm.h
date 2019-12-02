@@ -3,6 +3,8 @@
 
 #ifndef MM_TEST
 typedef unsigned int boz_mm_size;
+#else
+typedef size_t boz_mm_size;
 #endif
 
 /* Allocate "size" bytes of memory from the pool and return a pointer to it. */

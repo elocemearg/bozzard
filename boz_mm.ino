@@ -13,7 +13,12 @@
 
 char *boz_mm_arena = NULL;
 boz_mm_size boz_mm_arena_size = 0;
+
+#ifdef MM_TEST
+#define crash_on_alloc_failure 0
+#else
 byte crash_on_alloc_failure = 0;
+#endif
 
 extern void boz_crash(unsigned int);
 
