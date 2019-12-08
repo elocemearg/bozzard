@@ -5,8 +5,8 @@
 
 /* General-purpose program for games where you have lockout buzzers and a
    clock. Exact behaviour is controlled by the values in
-   struct game_rules *rules, which must be set before buzzer_game_general_init()
-   is called. */
+   struct game_rules *rules, which is set by buzzer_game_general_init()
+   based on what it gets passed. */
 
 const PROGMEM char s_bg_time_limit[] = "Time limit";
 const PROGMEM char s_bg_clock_counts_up[] = "Clock counts up";
