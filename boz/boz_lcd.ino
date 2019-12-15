@@ -13,7 +13,7 @@ const PROGMEM byte boz_char_patterns[][8] = {
     { 0x00, 0x0e, 0x19, 0x17, 0x17, 0x19, 0x0e, 0x00 }, // 7: copyright symbol
 };
 
-#ifdef BOZ_ORIGINAL
+#if BOZ_HW_REVISION == 0
 
 /* Code for the original Bozzer prototype. You probably want to ignore all
    of this and start after #else.

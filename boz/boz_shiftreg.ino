@@ -1,7 +1,7 @@
 #include "boz_shiftreg.h"
 #include "boz_pins.h"
 
-#ifdef BOZ_ORIGINAL
+#if BOZ_HW_REVISION == 0
 
 /* 8-bit shift register connected to pins PIN_SR_DATA, PIN_SR_CLOCK and
    PIN_SR_LATCH. */

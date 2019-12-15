@@ -5,7 +5,9 @@
 
 /* Pin assignments */
 
-#ifdef BOZ_ORIGINAL
+#if BOZ_HW_REVISION == 0
+
+/* Hardware revision 0 - the original prototype */
 #define PIN_SPEAKER     A0
 #define PIN_SR_DATA     A1
 #define PIN_SR_LATCH    A2
@@ -28,7 +30,7 @@
 
 #else
 
-/* New "cheapo" version */
+/* Hardware revision 1 */
 #define PIN_LED_R       A0
 #define PIN_LED_G       A1
 #define PIN_LED_Y       A2

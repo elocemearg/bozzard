@@ -15,7 +15,7 @@ boz_lcd_init();
 void
 boz_lcd_set_cgram_address(byte address);
 
-#ifndef BOZ_ORIGINAL
+#if BOZ_HW_REVISION >= 1
 byte
 boz_lcd_get_backlight_state(void);
 

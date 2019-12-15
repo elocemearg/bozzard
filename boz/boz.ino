@@ -336,7 +336,7 @@ boz_sound_stop_all(void) {
     queue_clear(&snd_cmd_queue.qstate);
 }
 
-#ifdef BOZ_ORIGINAL
+#if BOZ_HW_REVISION == 0
 void
 boz_led_set(int which_led, int on) {
     /* which_led must be between 0 and 3 */
@@ -634,7 +634,7 @@ boz_env_reset() {
 
     noTone(PIN_SPEAKER);
 
-#ifdef BOZ_ORIGINAL
+#if BOZ_HW_REVISION == 0
     boz_shift_reg_init();
 #endif
 
@@ -845,7 +845,7 @@ ISR(TIMER1_OVF_vect) {
 }
 
 byte read_turny_push_button(void) {
-#ifdef BOZ_ORIGINAL
+#if BOZ_HW_REVISION == 0
     return digitalRead(PIN_QM_RE_KEY);
 #else
     byte value;
@@ -889,7 +889,7 @@ void setup() {
     pinMode(PIN_QM_RE_DATA, INPUT_PULLUP);
     pinMode(PIN_QM_RE_KEY, INPUT_PULLUP);
 
-#ifdef BOZ_ORIGINAL
+#if BOZ_HW_REVISION == 0
     pinMode(PIN_BUTTON_INT, INPUT_PULLUP);
 #else
     /* Interrupt line is connected to the I/O pins through switches */
@@ -906,7 +906,7 @@ void setup() {
     /* Analogue pin on which we sense the battery voltage */
     pinMode(PIN_BATTERY_SENSOR, INPUT);
 
-#ifndef BOZ_ORIGINAL
+#if BOZ_HW_REVISION == 1
     pinMode(PIN_LED_R, OUTPUT);
     pinMode(PIN_LED_G, OUTPUT);
     pinMode(PIN_LED_Y, OUTPUT);
@@ -916,7 +916,7 @@ void setup() {
 
     boz_mm_init(boz_dyn_arena, sizeof(boz_dyn_arena));
 
-#ifdef BOZ_ORIGINAL
+#if BOZ_HW_REVISION == 0
     /* Initialise shift register - this will also set the appropriate pin
        modes on the pins we use to control the shift register */
     boz_shift_reg_init();
@@ -1437,7 +1437,7 @@ void loop() {
             }
             interrupts();
 
-#ifndef BOZ_ORIGINAL
+#if BOZ_HW_REVISION == 1
             /* The button input pins are connected to the interrupt pin through
                the switches. When going to sleep, we'll make the interrupt pin
                an input, and the I/O pins output low. */
@@ -1457,7 +1457,7 @@ void loop() {
                sleep_cpu(), the interrupt handler will have disabled sleep mode,
                so we don't now go to sleep and miss the interrupt. */
 
-#ifdef BOZ_ORIGINAL
+#if BOZ_HW_REVISION == 0
             digitalWrite(LED_BUILTIN, LOW);
 #endif
 
@@ -1470,7 +1470,7 @@ void loop() {
                 sleep_cpu();
             }
 
-#ifdef BOZ_ORIGINAL
+#if BOZ_HW_REVISION == 0
             digitalWrite(LED_BUILTIN, HIGH);
 #endif
 
@@ -1484,7 +1484,7 @@ void loop() {
             /* Disable TIMER1 overflow interrupt */
             TIMSK1 &= ~(1 << TOIE1);
 
-#ifndef BOZ_ORIGINAL
+#if BOZ_HW_REVISION == 1
             /* Set the interrupt pin to output LOW and the I/O pins to
                INPUT_PULLUP, so that we can tell which button if any
                woke us up. */
